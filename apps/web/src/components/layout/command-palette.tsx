@@ -73,7 +73,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40" />
-        <DialogPrimitive.Content className="fixed left-1/2 top-[12vh] z-50 w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-surface shadow-2xl">
+        <DialogPrimitive.Content className="fixed left-1/2 top-[4dvh] sm:top-[12vh] z-50 w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-surface shadow-2xl">
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">Search records or jump to a page</DialogPrimitive.Description>
           <Command shouldFilter={false} loop className="flex flex-col">
@@ -87,7 +87,7 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
               />
               {search.isFetching && <Spinner />}
             </div>
-            <Command.List className="max-h-[60vh] overflow-y-auto p-1.5 scrollbar-thin">
+            <Command.List className="max-h-[60dvh] overflow-y-auto p-1.5 scrollbar-thin">
               <Command.Empty className="px-3 py-6 text-center text-xs text-muted">{debounced.length >= 2 ? 'No results' : 'Type at least 2 characters'}</Command.Empty>
               {Object.entries(groups).map(([type, hits]) => {
                 const Icon = TYPE_ICON[type] ?? Search;

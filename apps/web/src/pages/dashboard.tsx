@@ -151,30 +151,32 @@ export default function DashboardPage() {
           <div className="grid gap-4 xl:grid-cols-2">
             <Card>
               <CardHeader title="Technician workload" description="Open tickets and hours logged in the period" />
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-                    <th className="px-4 py-2 font-semibold">Technician</th>
-                    <th className="px-4 py-2 text-right font-semibold">Open</th>
-                    <th className="px-4 py-2 text-right font-semibold">High / critical</th>
-                    <th className="px-4 py-2 text-right font-semibold">Hours</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {d.workload.map((w) => (
-                    <tr key={w.id} className="border-t border-border">
-                      <td className="px-4 py-1.5">
-                        <Link to={ticketLink({ assignedUserId: w.id, statusCategory: 'open' })} className="hover:text-primary">
-                          {w.name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-1.5 text-right tabular-nums">{w.openTickets}</td>
-                      <td className="px-4 py-1.5 text-right tabular-nums">{w.highPriority ? <span className="font-semibold text-danger">{w.highPriority}</span> : 0}</td>
-                      <td className="px-4 py-1.5 text-right tabular-nums">{(w.minutes / 60).toFixed(1)}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                      <th className="px-4 py-2 font-semibold">Technician</th>
+                      <th className="px-4 py-2 text-right font-semibold">Open</th>
+                      <th className="px-4 py-2 text-right font-semibold">High / critical</th>
+                      <th className="px-4 py-2 text-right font-semibold">Hours</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {d.workload.map((w) => (
+                      <tr key={w.id} className="border-t border-border">
+                        <td className="px-4 py-1.5">
+                          <Link to={ticketLink({ assignedUserId: w.id, statusCategory: 'open' })} className="hover:text-primary">
+                            {w.name}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-1.5 text-right tabular-nums">{w.openTickets}</td>
+                        <td className="px-4 py-1.5 text-right tabular-nums">{w.highPriority ? <span className="font-semibold text-danger">{w.highPriority}</span> : 0}</td>
+                        <td className="px-4 py-1.5 text-right tabular-nums">{(w.minutes / 60).toFixed(1)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
             <Card>
               <CardHeader title="Devices requiring attention" description="From Action1: disconnected, reboot pending or missing critical updates" actions={<AlertTriangle className="size-4 text-warning" />} />

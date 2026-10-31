@@ -34,7 +34,7 @@ export function Dialog({
         <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[1px] data-[state=open]:animate-in" />
         <DialogPrimitive.Content
           className={cn(
-            'fixed left-1/2 top-[8vh] z-50 flex max-h-[84vh] w-[calc(100vw-2rem)] -translate-x-1/2 flex-col rounded-lg border border-border bg-surface shadow-2xl focus:outline-none',
+            'fixed left-1/2 top-[4dvh] z-50 flex max-h-[92dvh] sm:top-[8dvh] sm:max-h-[84dvh] w-[calc(100vw-2rem)] -translate-x-1/2 flex-col rounded-lg border border-border bg-surface shadow-2xl focus:outline-none',
             width,
           )}
           onOpenAutoFocus={(e) => {

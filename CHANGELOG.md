@@ -4,6 +4,8 @@
 
 ### Added
 - Ticket CSV import (Tickets → Import, or Admin → Data Import) with notes, hours worked, created/resolved dates, status/priority mapping, optional creation of missing companies/contacts/picklist values, and safe re-import; ticket CSV export with a column chooser (adds description, notes, resolution and more). See [docs/ticket-import.md](docs/ticket-import.md).
+- Phone layout: below 768 px the sidebar becomes a slide-in menu (☰) and the header turns compact; below 640 px every list shows one card per row with a sort selector, and list filters fold behind a "Filters" button. Wide tables scroll inside their card instead of the page, dialogs use the dynamic viewport height, and form fields use 16 px text on touch screens so iOS Safari no longer zooms in. The customer portal header and ticket list wrap on phones.
+- "Add to Home Screen": web app manifest and app icons, so Taskora opens full-screen like an app on iPhone and Android.
 
 ### Fixed
 - Re-importing a ticket CSV no longer duplicates rows that have no ticket number: they match an existing ticket with the same company, title and "Created" date.

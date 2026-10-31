@@ -39,35 +39,37 @@ export function InboundEmailLog() {
       {(d?.data ?? []).length === 0 ? (
         <p className="px-4 py-5 text-center text-xs text-muted">No inbound e-mail processed yet.</p>
       ) : (
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-              <th className="px-4 py-2">Received</th>
-              <th className="px-4 py-2">From</th>
-              <th className="px-4 py-2">Subject</th>
-              <th className="px-4 py-2">Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {d!.data.map((r) => (
-              <tr key={r.id} className="border-t border-border">
-                <td className="whitespace-nowrap px-4 py-1.5 text-xs">{fmtDateTime(r.receivedAt)}</td>
-                <td className="px-4 py-1.5">{r.fromName ? `${r.fromName} <${r.fromAddress}>` : r.fromAddress}</td>
-                <td className="px-4 py-1.5 text-muted">{r.subject}</td>
-                <td className="px-4 py-1.5">
-                  <Badge tone={TONE[r.status] ?? 'info'} title={r.detail ?? undefined}>
-                    {r.status}
-                  </Badge>{' '}
-                  {r.ticketId && (
-                    <Link to={`/tickets/${r.ticketId}`} className="text-xs text-primary hover:underline">
-                      ticket
-                    </Link>
-                  )}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                <th className="px-4 py-2">Received</th>
+                <th className="px-4 py-2">From</th>
+                <th className="px-4 py-2">Subject</th>
+                <th className="px-4 py-2">Result</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {d!.data.map((r) => (
+                <tr key={r.id} className="border-t border-border">
+                  <td className="whitespace-nowrap px-4 py-1.5 text-xs">{fmtDateTime(r.receivedAt)}</td>
+                  <td className="px-4 py-1.5">{r.fromName ? `${r.fromName} <${r.fromAddress}>` : r.fromAddress}</td>
+                  <td className="px-4 py-1.5 text-muted">{r.subject}</td>
+                  <td className="px-4 py-1.5">
+                    <Badge tone={TONE[r.status] ?? 'info'} title={r.detail ?? undefined}>
+                      {r.status}
+                    </Badge>{' '}
+                    {r.ticketId && (
+                      <Link to={`/tickets/${r.ticketId}`} className="text-xs text-primary hover:underline">
+                        ticket
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </Card>
   );

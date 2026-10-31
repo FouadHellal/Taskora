@@ -89,30 +89,32 @@ export default function AnalyticsPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
               <CardHeader title="Technician effort" description="Billable, contract-covered and non-billable hours" />
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-                    <th className="px-4 py-2">Technician</th>
-                    <th className="px-4 py-2 text-right">Total</th>
-                    <th className="px-4 py-2 text-right">Billable</th>
-                    <th className="px-4 py-2 text-right">Contract</th>
-                    <th className="px-4 py-2 text-right">Non-billable</th>
-                    <th className="px-4 py-2 text-right">Open tickets</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(byTech.data ?? []).map((r) => (
-                    <tr key={String(r.group)} className="border-t border-border">
-                      <td className="px-4 py-1.5">{r.group}</td>
-                      <td className="px-4 py-1.5 text-right tabular-nums">{fmtNum(Number(r.hours), 1)}</td>
-                      <td className="px-4 py-1.5 text-right tabular-nums">{fmtNum(Number(r.billableHours), 1)}</td>
-                      <td className="px-4 py-1.5 text-right tabular-nums">{fmtNum(Number(r.contractHours), 1)}</td>
-                      <td className="px-4 py-1.5 text-right tabular-nums">{fmtNum(Number(r.nonBillableHours), 1)}</td>
-                      <td className="px-4 py-1.5 text-right tabular-nums">{d.workload.find((w: { name: string }) => w.name === r.group)?.openTickets ?? '—'}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                      <th className="px-4 py-2">Technician</th>
+                      <th className="px-4 py-2 text-right">Total</th>
+                      <th className="px-4 py-2 text-right">Billable</th>
+                      <th className="px-4 py-2 text-right">Contract</th>
+                      <th className="px-4 py-2 text-right">Non-billable</th>
+                      <th className="px-4 py-2 text-right">Open tickets</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {(byTech.data ?? []).map((r) => (
+                      <tr key={String(r.group)} className="border-t border-border">
+                        <td className="px-4 py-1.5">{r.group}</td>
+                        <td className="px-4 py-1.5 text-right tabular-nums">{fmtNum(Number(r.hours), 1)}</td>
+                        <td className="px-4 py-1.5 text-right tabular-nums">{fmtNum(Number(r.billableHours), 1)}</td>
+                        <td className="px-4 py-1.5 text-right tabular-nums">{fmtNum(Number(r.contractHours), 1)}</td>
+                        <td className="px-4 py-1.5 text-right tabular-nums">{fmtNum(Number(r.nonBillableHours), 1)}</td>
+                        <td className="px-4 py-1.5 text-right tabular-nums">{d.workload.find((w: { name: string }) => w.name === r.group)?.openTickets ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </Card>
             <Card>
               <CardHeader title="Top issue types" />

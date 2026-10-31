@@ -70,12 +70,12 @@ export function slaDue(r: Pick<TicketRow, 'sla' | 'firstResponseAt' | 'firstResp
 export const ticketColumns: Column<TicketRow>[] = [
   {
     header: 'Ticket',
-    meta: { sortKey: 'ticketNumber', className: 'w-28' },
+    meta: { sortKey: 'ticketNumber', className: 'w-28', mobile: 'secondary' },
     cell: ({ row }) => <span className="font-mono text-[12px] text-muted">{row.original.ticketNumber}</span>,
   },
   {
     header: 'Title',
-    meta: { sortKey: 'title', className: 'min-w-72' },
+    meta: { sortKey: 'title', className: 'min-w-72', mobile: 'primary' },
     cell: ({ row }) => (
       <div className="min-w-0">
         <Link to={`/tickets/${row.original.id}`} onClick={(e) => e.stopPropagation()} className="line-clamp-1 font-medium hover:text-primary">
@@ -111,7 +111,7 @@ export const ticketColumns: Column<TicketRow>[] = [
         <span className="text-subtle">Unassigned</span>
       ),
   },
-  { header: 'Queue', meta: { sortKey: 'queue' }, cell: ({ row }) => <span className="text-muted">{row.original.queueName ?? '—'}</span> },
+  { header: 'Queue', meta: { sortKey: 'queue', mobile: 'hide' }, cell: ({ row }) => <span className="text-muted">{row.original.queueName ?? '—'}</span> },
   {
     header: 'SLA',
     meta: { sortKey: 'dueAt' },

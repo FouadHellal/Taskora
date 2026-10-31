@@ -48,11 +48,11 @@ function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex h-14 max-w-5xl items-center gap-4 px-4">
-          <Link to="/portal" className="flex items-center gap-2 font-semibold">
-            <img src="/favicon.svg" alt="" className="size-6" /> {me.organizationName} Support
+        <div className="mx-auto flex min-h-14 max-w-5xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
+          <Link to="/portal" className="flex min-w-0 items-center gap-2 font-semibold">
+            <img src="/favicon.svg" alt="" className="size-6 shrink-0" /> <span className="truncate">{me.organizationName} Support</span>
           </Link>
-          <nav className="flex gap-1 text-[13px]">
+          <nav className="order-last flex w-full gap-1 text-[13px] sm:order-none sm:w-auto">
             <Link to="/portal" className="rounded px-2 py-1 hover:bg-surface-2">
               My tickets
             </Link>
@@ -60,8 +60,8 @@ function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
               Knowledge base
             </Link>
           </nav>
-          <div className="ml-auto flex items-center gap-3 text-[13px]">
-            <span className="text-muted">
+          <div className="ml-auto flex items-center gap-2 text-[13px] sm:gap-3">
+            <span className="hidden text-muted sm:inline">
               {me.contact?.firstName} {me.contact?.lastName} · {me.contact?.companyName}
             </span>
             <Button
@@ -73,7 +73,7 @@ function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
                 navigate('/portal/login');
               }}
             >
-              <LogOut /> Sign out
+              <LogOut /> <span className="hidden sm:inline">Sign out</span>
             </Button>
           </div>
         </div>
@@ -182,12 +182,12 @@ function TicketList({ me }: { me: Me }) {
           <ul className="divide-y divide-border">
             {q.data.data.map((t) => (
               <li key={t.id}>
-                <Link to={`/portal/tickets/${t.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-surface-2">
+                <Link to={`/portal/tickets/${t.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface-2 sm:flex-nowrap">
                   <span className="font-mono text-xs text-muted">{t.ticketNumber}</span>
-                  <span className="flex-1 truncate text-[13px] font-medium">{t.title}</span>
+                  <span className="order-first min-w-0 basis-full text-[14px] font-medium sm:order-none sm:flex-1 sm:basis-0 sm:truncate sm:text-[13px]">{t.title}</span>
                   {me.contact?.seesCompanyTickets && <span className="text-xs text-muted">{t.contactName}</span>}
                   <StatusBadge name={t.statusName} color={t.statusColor} />
-                  <span className="w-28 text-right text-xs text-muted">{fmtRelative(t.lastActivityAt)}</span>
+                  <span className="ml-auto text-right text-xs text-muted sm:ml-0 sm:w-28">{fmtRelative(t.lastActivityAt)}</span>
                 </Link>
               </li>
             ))}

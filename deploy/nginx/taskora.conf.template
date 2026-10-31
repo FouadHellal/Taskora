@@ -88,6 +88,15 @@ server {
         include /etc/nginx/snippets/security-headers.conf;
     }
 
+    # Web app manifest ("Add to Home Screen"); not every nginx mime.types maps
+    # .webmanifest, and the security headers send nosniff.
+    location = /manifest.webmanifest {
+        default_type application/manifest+json;
+        try_files $uri =404;
+        add_header Cache-Control "public, max-age=3600" always;
+        include /etc/nginx/snippets/security-headers.conf;
+    }
+
     # Never serve dotfiles.
     location ~ /\. {
         return 404;

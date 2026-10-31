@@ -64,19 +64,21 @@ export function SystemHealth() {
         </Card>
         <Card>
           <CardHeader title="Jobs by type" />
-          <table className="w-full text-[13px]">
-            <tbody>
-              {h.jobs.map((j) => (
-                <tr key={`${j.type}-${j.status}`} className="border-t border-border">
-                  <td className="px-4 py-1.5 font-mono text-[12px]">{j.type}</td>
-                  <td className="px-4 py-1.5">
-                    <Badge tone={j.status === 'failed' ? 'danger' : j.status === 'done' ? 'success' : 'info'}>{j.status}</Badge>
-                  </td>
-                  <td className="px-4 py-1.5 text-right tabular-nums">{j.n}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <tbody>
+                {h.jobs.map((j) => (
+                  <tr key={`${j.type}-${j.status}`} className="border-t border-border">
+                    <td className="px-4 py-1.5 font-mono text-[12px]">{j.type}</td>
+                    <td className="px-4 py-1.5">
+                      <Badge tone={j.status === 'failed' ? 'danger' : j.status === 'done' ? 'success' : 'info'}>{j.status}</Badge>
+                    </td>
+                    <td className="px-4 py-1.5 text-right tabular-nums">{j.n}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </Card>
       </div>
       {h.failedJobs.length > 0 && (

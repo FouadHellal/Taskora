@@ -285,38 +285,40 @@ function SlaPolicies() {
           </Button>
         }
       />
-      <table className="w-full text-[13px]">
-        <thead>
-          <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-            <th className="px-4 py-2">Policy</th>
-            <th className="px-4 py-2">Calendar</th>
-            {lookups.data?.priorities.map((p) => (
-              <th key={p.id} className="px-4 py-2">
-                {p.name}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {q.data?.data.map((p) => (
-            <tr key={p.id} className="cursor-pointer border-t border-border hover:bg-surface-2" onClick={() => setEditing(p)}>
-              <td className="px-4 py-2">
-                <span className="font-medium">{p.name}</span> {p.isDefault && <Badge tone="primary">Default</Badge>} {!p.isActive && <Badge>Inactive</Badge>}
-                {p.description && <div className="text-xs text-muted">{p.description}</div>}
-              </td>
-              <td className="px-4 py-2 text-muted">{hours.data?.data.find((h) => h.id === p.businessHoursId)?.name ?? '24x7'}</td>
-              {lookups.data?.priorities.map((pr) => {
-                const t = p.targets.find((x) => x.priorityId === pr.id);
-                return (
-                  <td key={pr.id} className="px-4 py-2 text-xs">
-                    {t ? `${toH(t.firstResponseMinutes) || '—'} h / ${toH(t.resolutionMinutes) || '—'} h` : '—'}
-                  </td>
-                );
-              })}
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13px]">
+          <thead>
+            <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+              <th className="px-4 py-2">Policy</th>
+              <th className="px-4 py-2">Calendar</th>
+              {lookups.data?.priorities.map((p) => (
+                <th key={p.id} className="px-4 py-2">
+                  {p.name}
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {q.data?.data.map((p) => (
+              <tr key={p.id} className="cursor-pointer border-t border-border hover:bg-surface-2" onClick={() => setEditing(p)}>
+                <td className="px-4 py-2">
+                  <span className="font-medium">{p.name}</span> {p.isDefault && <Badge tone="primary">Default</Badge>} {!p.isActive && <Badge>Inactive</Badge>}
+                  {p.description && <div className="text-xs text-muted">{p.description}</div>}
+                </td>
+                <td className="px-4 py-2 text-muted">{hours.data?.data.find((h) => h.id === p.businessHoursId)?.name ?? '24x7'}</td>
+                {lookups.data?.priorities.map((pr) => {
+                  const t = p.targets.find((x) => x.priorityId === pr.id);
+                  return (
+                    <td key={pr.id} className="px-4 py-2 text-xs">
+                      {t ? `${toH(t.firstResponseMinutes) || '—'} h / ${toH(t.resolutionMinutes) || '—'} h` : '—'}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <p className="px-4 py-2 text-[11px] text-muted">Cells show first response / resolution targets in business hours.</p>
       {editing && <SlaDialog policy={editing === 'new' ? null : editing} calendars={hours.data?.data ?? []} onClose={() => setEditing(null)} />}
     </Card>
@@ -395,28 +397,30 @@ function SlaDialog({ policy, calendars, onClose }: { policy: SlaPolicy | null; c
           <Checkbox label="Default policy" checked={f.isDefault} onChange={(e) => setF({ ...f, isDefault: e.target.checked })} />
           <Checkbox label="Active" checked={f.isActive} onChange={(e) => setF({ ...f, isActive: e.target.checked })} />
         </div>
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-              <th className="py-1">Priority</th>
-              <th>First response (h)</th>
-              <th>Resolution (h)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lookups.data?.priorities.map((p) => (
-              <tr key={p.id}>
-                <td className="py-1 pr-3 font-medium">{p.name}</td>
-                <td className="pr-3">
-                  <Input type="number" min={0} step="0.25" value={targets[p.id]?.fr ?? ''} onChange={(e) => setTargets({ ...targets, [p.id]: { ...targets[p.id]!, fr: e.target.value } })} />
-                </td>
-                <td>
-                  <Input type="number" min={0} step="0.25" value={targets[p.id]?.res ?? ''} onChange={(e) => setTargets({ ...targets, [p.id]: { ...targets[p.id]!, res: e.target.value } })} />
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                <th className="py-1">Priority</th>
+                <th>First response (h)</th>
+                <th>Resolution (h)</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {lookups.data?.priorities.map((p) => (
+                <tr key={p.id}>
+                  <td className="py-1 pr-3 font-medium">{p.name}</td>
+                  <td className="pr-3">
+                    <Input type="number" min={0} step="0.25" value={targets[p.id]?.fr ?? ''} onChange={(e) => setTargets({ ...targets, [p.id]: { ...targets[p.id]!, fr: e.target.value } })} />
+                  </td>
+                  <td>
+                    <Input type="number" min={0} step="0.25" value={targets[p.id]?.res ?? ''} onChange={(e) => setTargets({ ...targets, [p.id]: { ...targets[p.id]!, res: e.target.value } })} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </Dialog>
   );

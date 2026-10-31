@@ -1,8 +1,9 @@
-import type { ReactNode } from 'react';
+import { Children, Fragment, isValidElement, type ReactElement, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, Search } from 'lucide-react';
+import { ChevronRight, Search, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
+import { usePhone } from '@/hooks/use-media-query';
 
 export function PageHeader({
   title,
@@ -48,7 +49,7 @@ export function PageHeader({
             {subtitle && <div className="mt-0.5 text-[13px] text-muted">{subtitle}</div>}
           </div>
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+        {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
       {children}
     </div>
@@ -61,11 +62,49 @@ export function PageBody({ children, className }: { children: ReactNode; classNa
 
 /** Full-height list page layout: header + toolbar + table filling the rest. */
 export function ListLayout({ header, toolbar, children }: { header: ReactNode; toolbar?: ReactNode; children: ReactNode }) {
+  const phone = usePhone();
   return (
     <div className="flex h-full flex-col">
       {header}
-      {toolbar && <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-5 py-2">{toolbar}</div>}
+      {toolbar && (phone ? <PhoneToolbar toolbar={toolbar} /> : <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-5 py-2">{toolbar}</div>)}
       <div className="min-h-0 flex-1 bg-surface">{children}</div>
+    </div>
+  );
+}
+
+/** Flattens fragments so the toolbar's own items can be told apart. */
+function flatten(node: ReactNode): ReactNode[] {
+  return Children.toArray(node).flatMap((c) => (isValidElement(c) && c.type === Fragment ? flatten((c as ReactElement<{ children?: ReactNode }>).props.children) : [c]));
+}
+
+/**
+ * On phones the search box stays visible and the other filters fold away
+ * behind a "Filters" button, so the list starts near the top of the screen.
+ */
+function PhoneToolbar({ toolbar }: { toolbar: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const items = flatten(toolbar);
+  const search = items.filter((c) => isValidElement(c) && c.type === SearchInput);
+  const rest = items.filter((c) => !search.includes(c));
+  // A single block (e.g. bulk actions for selected rows) is shown as is.
+  if (rest.length < 2) return <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface px-3 py-2">{toolbar}</div>;
+  return (
+    <div className="border-b border-border bg-surface px-3 py-2">
+      <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1 [&>*]:w-full">{search}</div>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className={cn(
+            'inline-flex h-9 shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 text-[13px] font-medium',
+            open ? 'bg-primary-soft text-primary' : 'bg-surface-2 text-muted',
+          )}
+        >
+          <SlidersHorizontal className="size-4" /> Filters
+        </button>
+      </div>
+      {open && <div className="mt-2 grid grid-cols-2 gap-2 [&>*]:w-full [&>*]:min-w-0">{rest}</div>}
     </div>
   );
 }

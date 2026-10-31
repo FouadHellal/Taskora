@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronsLeft, ChevronsRight, Laptop, LogOut, Mail, Moon, Plus, Search, Sun, Monitor, KeyRound, Keyboard } from 'lucide-react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { ChevronsLeft, ChevronsRight, Laptop, LogOut, Mail, Menu, Moon, Plus, Search, Sun, Monitor, KeyRound, Keyboard, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth, useMe } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -14,6 +15,7 @@ import { CommandPalette } from './command-palette';
 import { TimerWidget } from './timer-widget';
 import { NotificationBell } from './notification-bell';
 import { useTheme } from '@/hooks/use-theme';
+import { useNarrow } from '@/hooks/use-media-query';
 import { ShortcutsDialog, useGlobalShortcuts } from './shortcuts';
 import { ChangePasswordDialog } from './change-password';
 import { SessionsDialog } from './sessions';
@@ -41,6 +43,11 @@ export function AppShell() {
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const { theme, setTheme } = useTheme();
   const orgLogo = logoUrl('organization', 0, me.organization.logoUpdatedAt);
+  const narrow = useNarrow();
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // The slide-in menu closes after navigating.
+  useEffect(() => setMenuOpen(false), [location.pathname]);
 
   useEffect(() => {
     try {
@@ -59,42 +66,76 @@ export function AppShell() {
     refetchInterval: 60_000,
   });
 
+  const brand = (
+    <div className="flex h-12 shrink-0 items-center gap-2 px-3.5">
+      {orgLogo ? <img src={orgLogo} alt="" className="size-7 rounded bg-white object-contain p-0.5" /> : <img src="/favicon.svg" alt="" className="size-6" />}
+      {(!collapsed || narrow) && <span className="truncate text-[15px] font-semibold tracking-tight text-white">{orgLogo ? me.organization.name : 'Taskora'}</span>}
+    </div>
+  );
+
   return (
-    <div className="flex h-screen overflow-hidden">
-      <aside className={cn('flex shrink-0 flex-col bg-sidebar text-sidebar-fg transition-[width] duration-150', collapsed ? 'w-14' : 'w-60')}>
-        <div className="flex h-12 shrink-0 items-center gap-2 px-3.5">
-          {orgLogo ? (
-            <img src={orgLogo} alt="" className="size-7 rounded bg-white object-contain p-0.5" />
-          ) : (
-            <img src="/favicon.svg" alt="" className="size-6" />
-          )}
-          {!collapsed && <span className="truncate text-[15px] font-semibold tracking-tight text-white">{orgLogo ? me.organization.name : 'Taskora'}</span>}
-        </div>
-        <SidebarNav collapsed={collapsed} counts={counts.data} />
-        <button
-          onClick={() => setCollapsed((c) => !c)}
-          className="flex h-9 shrink-0 cursor-pointer items-center gap-2 border-t border-white/5 px-4 text-xs text-sidebar-muted hover:text-white"
-          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-        >
-          {collapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
-          {!collapsed && 'Collapse'}
-        </button>
-      </aside>
+    <div className="flex h-dvh overflow-hidden">
+      {narrow ? (
+        <DialogPrimitive.Root open={menuOpen} onOpenChange={setMenuOpen}>
+          <DialogPrimitive.Portal>
+            <DialogPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50" />
+            <DialogPrimitive.Content
+              className="fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col bg-sidebar pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-sidebar-fg shadow-2xl focus:outline-none"
+              aria-describedby={undefined}
+            >
+              <DialogPrimitive.Title className="sr-only">Menu</DialogPrimitive.Title>
+              <div className="flex items-center justify-between pr-2">
+                {brand}
+                <DialogPrimitive.Close className="flex size-9 cursor-pointer items-center justify-center rounded-md text-sidebar-muted hover:text-white" aria-label="Close menu">
+                  <X className="size-5" />
+                </DialogPrimitive.Close>
+              </div>
+              <div className="nav-touch flex min-h-0 flex-1 flex-col">
+                <SidebarNav collapsed={false} counts={counts.data} />
+              </div>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
+        </DialogPrimitive.Root>
+      ) : (
+        <aside className={cn('flex shrink-0 flex-col bg-sidebar text-sidebar-fg transition-[width] duration-150', collapsed ? 'w-14' : 'w-60')}>
+          {brand}
+          <SidebarNav collapsed={collapsed} counts={counts.data} />
+          <button
+            onClick={() => setCollapsed((c) => !c)}
+            className="flex h-9 shrink-0 cursor-pointer items-center gap-2 border-t border-white/5 px-4 text-xs text-sidebar-muted hover:text-white"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
+            {!collapsed && 'Collapse'}
+          </button>
+        </aside>
+      )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
-          <button
-            onClick={() => setPaletteOpen(true)}
-            className="flex h-8 w-full max-w-md cursor-pointer items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 text-[13px] text-muted hover:border-border-strong"
-          >
-            <Search className="size-3.5" />
-            <span className="flex-1 text-left">Search tickets, companies, contacts, devices…</span>
-            <Kbd>Ctrl K</Kbd>
-          </button>
-          <div className="ml-auto flex items-center gap-1.5">
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-2 sm:gap-3 sm:px-4">
+          {narrow && (
+            <Button variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label="Open menu">
+              <Menu />
+            </Button>
+          )}
+          {narrow ? (
+            <Button variant="ghost" size="icon" onClick={() => setPaletteOpen(true)} aria-label="Search">
+              <Search />
+            </Button>
+          ) : (
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="flex h-8 w-full max-w-md cursor-pointer items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 text-[13px] text-muted hover:border-border-strong"
+            >
+              <Search className="size-3.5" />
+              <span className="flex-1 truncate text-left">Search tickets, companies, contacts, devices…</span>
+              <Kbd>Ctrl K</Kbd>
+            </button>
+          )}
+          <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
             {can('tickets.write') && (
-              <Button variant="primary" size="sm" onClick={() => navigate('/tickets/new', { state: { from: location.pathname } })}>
-                <Plus /> New ticket
+              <Button variant="primary" size={narrow ? 'icon' : 'sm'} onClick={() => navigate('/tickets/new', { state: { from: location.pathname } })} aria-label="New ticket">
+                <Plus /> {!narrow && 'New ticket'}
               </Button>
             )}
             {can('time.write') && <TimerWidget />}

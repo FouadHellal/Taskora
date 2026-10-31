@@ -92,45 +92,47 @@ export function ContractRatesTab({ contractId, rates, contractRate }: { contract
           )
         }
       />
-      <table className="w-full border-separate border-spacing-0 text-[13px]">
-        <thead>
-          <tr>
-            <th className={th}>Work type</th>
-            <th className={th}>Billable</th>
-            <th className={`${th} text-right`}>Default rate</th>
-            <th className={`${th} w-48 text-right`}>Contract rate</th>
-          </tr>
-        </thead>
-        <tbody>
-          {workTypes.map((w) => (
-            <tr key={w.id}>
-              <td className={td}>
-                {w.name}
-                {w.code && <span className="ml-1.5 text-xs text-muted">{w.code}</span>}
-              </td>
-              <td className={td}>{w.isBillable ? <Badge tone="success">Billable</Badge> : <Badge>Non-billable</Badge>}</td>
-              <td className={`${td} text-right tabular-nums text-muted`}>{w.hourlyRate != null ? money(w.hourlyRate) : '—'}</td>
-              <td className={`${td} text-right`}>
-                {editable ? (
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className="ml-auto h-7 w-32 text-right"
-                    placeholder="Inherit"
-                    value={values[w.id] ?? ''}
-                    onChange={(e) => setValues((v) => ({ ...v, [w.id]: e.target.value }))}
-                  />
-                ) : values[w.id] ? (
-                  money(Number(values[w.id]))
-                ) : (
-                  <span className="text-subtle">Inherit</span>
-                )}
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full border-separate border-spacing-0 text-[13px]">
+          <thead>
+            <tr>
+              <th className={th}>Work type</th>
+              <th className={th}>Billable</th>
+              <th className={`${th} text-right`}>Default rate</th>
+              <th className={`${th} w-48 text-right`}>Contract rate</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {workTypes.map((w) => (
+              <tr key={w.id}>
+                <td className={td}>
+                  {w.name}
+                  {w.code && <span className="ml-1.5 text-xs text-muted">{w.code}</span>}
+                </td>
+                <td className={td}>{w.isBillable ? <Badge tone="success">Billable</Badge> : <Badge>Non-billable</Badge>}</td>
+                <td className={`${td} text-right tabular-nums text-muted`}>{w.hourlyRate != null ? money(w.hourlyRate) : '—'}</td>
+                <td className={`${td} text-right`}>
+                  {editable ? (
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      className="ml-auto h-7 w-32 text-right"
+                      placeholder="Inherit"
+                      value={values[w.id] ?? ''}
+                      onChange={(e) => setValues((v) => ({ ...v, [w.id]: e.target.value }))}
+                    />
+                  ) : values[w.id] ? (
+                    money(Number(values[w.id]))
+                  ) : (
+                    <span className="text-subtle">Inherit</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       {!workTypes.length && <EmptyState title="No work types" description="Configure work types under Admin → Ticket settings." />}
     </Card>
   );
@@ -196,36 +198,38 @@ export function ContractBlocksTab({ contractId, blocks, usedHours, overageRate }
         }
       />
       {blocks.length ? (
-        <table className="w-full border-separate border-spacing-0 text-[13px]">
-          <thead>
-            <tr>
-              <th className={th}>Start</th>
-              <th className={th}>End</th>
-              <th className={`${th} text-right`}>Hours</th>
-              <th className={`${th} text-right`}>Amount</th>
-              <th className={th}>Payment</th>
-              <th className={`${th} w-10`} />
-            </tr>
-          </thead>
-          <tbody>
-            {blocks.map((b) => (
-              <tr key={b.id}>
-                <td className={td}>{fmtDate(b.startDate)}</td>
-                <td className={td}>{b.endDate ? fmtDate(b.endDate) : <span className="text-subtle">No expiry</span>}</td>
-                <td className={`${td} text-right tabular-nums`}>{b.hours} h</td>
-                <td className={`${td} text-right tabular-nums`}>{b.amount != null ? money(b.amount) : '—'}</td>
-                <td className={td}>{b.isPaid ? <Badge tone="success">Paid</Badge> : <Badge tone="warning">Unpaid</Badge>}</td>
-                <td className={td}>
-                  {editable && (
-                    <Button size="icon-sm" variant="ghost" aria-label="Delete block" onClick={() => setDeleting(b)}>
-                      <Trash2 />
-                    </Button>
-                  )}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full border-separate border-spacing-0 text-[13px]">
+            <thead>
+              <tr>
+                <th className={th}>Start</th>
+                <th className={th}>End</th>
+                <th className={`${th} text-right`}>Hours</th>
+                <th className={`${th} text-right`}>Amount</th>
+                <th className={th}>Payment</th>
+                <th className={`${th} w-10`} />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {blocks.map((b) => (
+                <tr key={b.id}>
+                  <td className={td}>{fmtDate(b.startDate)}</td>
+                  <td className={td}>{b.endDate ? fmtDate(b.endDate) : <span className="text-subtle">No expiry</span>}</td>
+                  <td className={`${td} text-right tabular-nums`}>{b.hours} h</td>
+                  <td className={`${td} text-right tabular-nums`}>{b.amount != null ? money(b.amount) : '—'}</td>
+                  <td className={td}>{b.isPaid ? <Badge tone="success">Paid</Badge> : <Badge tone="warning">Unpaid</Badge>}</td>
+                  <td className={td}>
+                    {editable && (
+                      <Button size="icon-sm" variant="ghost" aria-label="Delete block" onClick={() => setDeleting(b)}>
+                        <Trash2 />
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <EmptyState icon={<Timer />} title="No hour blocks" description="Add prepaid hour blocks to track consumption against this contract." />
       )}
@@ -309,52 +313,54 @@ export function ContractServicesTab({ contractId, services }: { contractId: numb
         }
       />
       {services.length ? (
-        <table className="w-full border-separate border-spacing-0 text-[13px]">
-          <thead>
-            <tr>
-              <th className={th}>Service</th>
-              <th className={th}>Period</th>
-              <th className={th}>Start</th>
-              <th className={`${th} text-right`}>Qty</th>
-              <th className={`${th} text-right`}>Unit price</th>
-              <th className={`${th} text-right`}>Total</th>
-              <th className={`${th} w-20`} />
-            </tr>
-          </thead>
-          <tbody>
-            {services.map((l) => (
-              <tr key={l.id}>
-                <td className={`${td} font-medium`}>{l.serviceName}</td>
-                <td className={td}>{labelOf(BILLING_PERIOD, l.period)}</td>
-                <td className={td}>{fmtDate(l.startDate)}</td>
-                <td className={`${td} text-right tabular-nums`}>{l.quantity}</td>
-                <td className={`${td} text-right tabular-nums`}>{money(l.unitPrice)}</td>
-                <td className={`${td} text-right font-medium tabular-nums`}>{money(l.quantity * l.unitPrice)}</td>
-                <td className={`${td} text-right`}>
-                  {editable && (
-                    <div className="flex justify-end gap-0.5">
-                      <Button size="icon-sm" variant="ghost" aria-label="Edit service" onClick={() => setEditing(l)}>
-                        <Pencil />
-                      </Button>
-                      <Button size="icon-sm" variant="ghost" aria-label="Remove service" onClick={() => setDeleting(l)}>
-                        <Trash2 />
-                      </Button>
-                    </div>
-                  )}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full border-separate border-spacing-0 text-[13px]">
+            <thead>
+              <tr>
+                <th className={th}>Service</th>
+                <th className={th}>Period</th>
+                <th className={th}>Start</th>
+                <th className={`${th} text-right`}>Qty</th>
+                <th className={`${th} text-right`}>Unit price</th>
+                <th className={`${th} text-right`}>Total</th>
+                <th className={`${th} w-20`} />
               </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={5} className="px-3 py-2 text-right text-xs font-medium text-muted">
-                Total per period
-              </td>
-              <td className="px-3 py-2 text-right font-semibold tabular-nums">{money(total)}</td>
-              <td />
-            </tr>
-          </tfoot>
-        </table>
+            </thead>
+            <tbody>
+              {services.map((l) => (
+                <tr key={l.id}>
+                  <td className={`${td} font-medium`}>{l.serviceName}</td>
+                  <td className={td}>{labelOf(BILLING_PERIOD, l.period)}</td>
+                  <td className={td}>{fmtDate(l.startDate)}</td>
+                  <td className={`${td} text-right tabular-nums`}>{l.quantity}</td>
+                  <td className={`${td} text-right tabular-nums`}>{money(l.unitPrice)}</td>
+                  <td className={`${td} text-right font-medium tabular-nums`}>{money(l.quantity * l.unitPrice)}</td>
+                  <td className={`${td} text-right`}>
+                    {editable && (
+                      <div className="flex justify-end gap-0.5">
+                        <Button size="icon-sm" variant="ghost" aria-label="Edit service" onClick={() => setEditing(l)}>
+                          <Pencil />
+                        </Button>
+                        <Button size="icon-sm" variant="ghost" aria-label="Remove service" onClick={() => setDeleting(l)}>
+                          <Trash2 />
+                        </Button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td colSpan={5} className="px-3 py-2 text-right text-xs font-medium text-muted">
+                  Total per period
+                </td>
+                <td className="px-3 py-2 text-right font-semibold tabular-nums">{money(total)}</td>
+                <td />
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       ) : (
         <EmptyState icon={<Package />} title="No services" description="Add services from the service catalog to bill them every period." />
       )}

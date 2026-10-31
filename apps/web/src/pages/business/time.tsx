@@ -216,7 +216,7 @@ export default function TimePage() {
                 This week
               </Button>
             </div>
-            <div className="grid flex-1 grid-cols-8 gap-1">
+            <div className="grid min-w-full flex-1 grid-cols-8 gap-1 sm:min-w-0">
               {days.map((d) => {
                 const tot = dayTotals(d);
                 const active = t.filters.from === ymd(d) && t.filters.to === ymd(d);
@@ -227,7 +227,7 @@ export default function TimePage() {
                     type="button"
                     onClick={() => (active ? setWeek(weekStart) : t.setFilters({ from: ymd(d), to: ymd(d) }))}
                     className={cn(
-                      'cursor-pointer rounded-md border px-2 py-1 text-left transition-colors hover:border-border-strong',
+                      'cursor-pointer rounded-md border px-1 py-1 text-left transition-colors hover:border-border-strong sm:px-2',
                       active ? 'border-primary bg-primary-soft' : 'border-border bg-surface-2/50',
                     )}
                     title={active ? 'Show whole week' : 'Show this day only'}
@@ -238,7 +238,7 @@ export default function TimePage() {
                   </button>
                 );
               })}
-              <div className="rounded-md border border-border px-2 py-1">
+              <div className="rounded-md border border-border px-1 py-1 sm:px-2">
                 <div className="text-[11px] font-medium uppercase text-muted">Week</div>
                 <div className="text-sm font-semibold tabular-nums">{formatMinutes(weekTotal)}</div>
                 <div className="text-[10px] text-muted tabular-nums">{formatMinutes(weekBillable)} bill.</div>

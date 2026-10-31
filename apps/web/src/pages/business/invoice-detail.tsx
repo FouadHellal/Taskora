@@ -125,45 +125,47 @@ export default function InvoiceDetailPage() {
       <div className="grid gap-4 p-5 xl:grid-cols-[1fr_300px]">
         <Card>
           <CardHeader title="Lines" description={draft ? 'Draft: lines can still be changed' : undefined} />
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-                <th className="px-4 py-2">Type</th>
-                <th className="px-4 py-2">Description</th>
-                <th className="px-4 py-2 text-right">Qty</th>
-                <th className="px-4 py-2 text-right">Unit price</th>
-                <th className="px-4 py-2 text-right">Amount</th>
-                <th />
-              </tr>
-            </thead>
-            <tbody>
-              {inv.lines.map((l) => (
-                <tr key={l.id} className="border-t border-border">
-                  <td className="px-4 py-1.5">
-                    <Badge>{l.kind}</Badge>
-                  </td>
-                  <td className="px-4 py-1.5">{l.description}</td>
-                  <td className="px-4 py-1.5 text-right tabular-nums">{l.quantity}</td>
-                  <td className="px-4 py-1.5 text-right tabular-nums">{money(l.unitPrice)}</td>
-                  <td className="px-4 py-1.5 text-right font-medium tabular-nums">{money(l.amount)}</td>
-                  <td className="pr-2 text-right">
-                    {write && draft && (
-                      <Button size="icon-sm" variant="ghost" onClick={() => delLine.mutate(l.id)} aria-label="Remove line">
-                        <X />
-                      </Button>
-                    )}
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                  <th className="px-4 py-2">Type</th>
+                  <th className="px-4 py-2">Description</th>
+                  <th className="px-4 py-2 text-right">Qty</th>
+                  <th className="px-4 py-2 text-right">Unit price</th>
+                  <th className="px-4 py-2 text-right">Amount</th>
+                  <th />
                 </tr>
-              ))}
-              {inv.lines.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-xs text-muted">
-                    No lines.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {inv.lines.map((l) => (
+                  <tr key={l.id} className="border-t border-border">
+                    <td className="px-4 py-1.5">
+                      <Badge>{l.kind}</Badge>
+                    </td>
+                    <td className="px-4 py-1.5">{l.description}</td>
+                    <td className="px-4 py-1.5 text-right tabular-nums">{l.quantity}</td>
+                    <td className="px-4 py-1.5 text-right tabular-nums">{money(l.unitPrice)}</td>
+                    <td className="px-4 py-1.5 text-right font-medium tabular-nums">{money(l.amount)}</td>
+                    <td className="pr-2 text-right">
+                      {write && draft && (
+                        <Button size="icon-sm" variant="ghost" onClick={() => delLine.mutate(l.id)} aria-label="Remove line">
+                          <X />
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {inv.lines.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-6 text-center text-xs text-muted">
+                      No lines.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
           {write && draft && (
             <div className="flex gap-2 border-t border-border p-3">
               <Input value={line.description} onChange={(e) => setLine({ ...line, description: e.target.value })} placeholder="Manual line description" />

@@ -98,30 +98,32 @@ export default function AuditPage() {
       <Dialog open={!!open} onOpenChange={(o) => !o && setOpen(null)} title={open ? `${open.action} · ${open.entityType}${open.entityId ? ` #${open.entityId}` : ''}` : ''} description={open ? `${open.userName ?? 'System'} · ${fmtDateTime(open.at)} · ${open.ip ?? ''}` : ''} size="lg">
         {open?.summary && <p className="mb-3 text-[13px]">{open.summary}</p>}
         {changes && Object.keys(changes).length > 0 ? (
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-                <th className="py-1">Field</th>
-                <th>Before</th>
-                <th>After</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(changes).map(([k, v]) => (
-                <tr key={k} className="border-t border-border align-top">
-                  <td className="py-1.5 pr-3 font-medium">{k}</td>
-                  {Array.isArray(v) && v.length === 2 ? (
-                    <>
-                      <td className="pr-3 text-muted">{fmtVal(v[0])}</td>
-                      <td>{fmtVal(v[1])}</td>
-                    </>
-                  ) : (
-                    <td colSpan={2}>{fmtVal(v)}</td>
-                  )}
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                  <th className="py-1">Field</th>
+                  <th>Before</th>
+                  <th>After</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {Object.entries(changes).map(([k, v]) => (
+                  <tr key={k} className="border-t border-border align-top">
+                    <td className="py-1.5 pr-3 font-medium">{k}</td>
+                    {Array.isArray(v) && v.length === 2 ? (
+                      <>
+                        <td className="pr-3 text-muted">{fmtVal(v[0])}</td>
+                        <td>{fmtVal(v[1])}</td>
+                      </>
+                    ) : (
+                      <td colSpan={2}>{fmtVal(v)}</td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           <p className="text-xs text-muted">No field-level changes recorded.</p>
         )}

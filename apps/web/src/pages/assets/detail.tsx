@@ -363,34 +363,36 @@ function SoftwareList({ ciId, canWrite }: { ciId: number; canWrite: boolean }) {
       {(q.data?.data ?? []).length === 0 ? (
         <p className="text-xs text-muted">No software recorded.</p>
       ) : (
-        <table className="w-full text-[13px]">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
-              <th className="py-1.5">Name</th>
-              <th>Version</th>
-              <th>Publisher</th>
-              <th>Source</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {q.data!.data.map((s) => (
-              <tr key={s.id} className="border-t border-border">
-                <td className="py-1.5">{s.name}</td>
-                <td className="text-muted">{s.version ?? '—'}</td>
-                <td className="text-muted">{s.publisher ?? '—'}</td>
-                <td className="text-muted">{s.source}</td>
-                <td className="text-right">
-                  {canWrite && (
-                    <Button size="icon-sm" variant="ghost" onClick={() => remove.mutate(s.id)} aria-label="Remove software">
-                      <X />
-                    </Button>
-                  )}
-                </td>
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                <th className="py-1.5">Name</th>
+                <th>Version</th>
+                <th>Publisher</th>
+                <th>Source</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {q.data!.data.map((s) => (
+                <tr key={s.id} className="border-t border-border">
+                  <td className="py-1.5">{s.name}</td>
+                  <td className="text-muted">{s.version ?? '—'}</td>
+                  <td className="text-muted">{s.publisher ?? '—'}</td>
+                  <td className="text-muted">{s.source}</td>
+                  <td className="text-right">
+                    {canWrite && (
+                      <Button size="icon-sm" variant="ghost" onClick={() => remove.mutate(s.id)} aria-label="Remove software">
+                        <X />
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -145,3 +145,57 @@
   .markdown blockquote { border-left: 3px solid var(--border-strong); padding-left: 0.8rem; color: var(--muted); }
   .scrollbar-thin { scrollbar-width: thin; }
 }
+
+/*
+ * Phones. iOS Safari zooms the page when a focused field's text is smaller
+ * than 16px, so form controls use 16px on small touch screens. Page padding
+ * shrinks so content gets the width.
+ */
+@media (max-width: 767px) and (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 639px) {
+  main .p-5 {
+    padding: 0.75rem;
+  }
+  main .px-5 {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Slide-in menu on phones: finger-sized rows. */
+.nav-touch nav a,
+.nav-touch nav button {
+  min-height: 2.5rem;
+  font-size: 15px;
+}
+.nav-touch nav svg {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+.nav-touch nav button.uppercase {
+  min-height: 2.25rem;
+  font-size: 11px;
+}
+.nav-touch nav button.uppercase svg {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+@layer base {
+  /* Grid items may shrink below their content (long e-mail addresses, URLs). */
+  .grid > * {
+    min-width: 0;
+  }
+}
