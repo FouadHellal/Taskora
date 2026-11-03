@@ -36,6 +36,7 @@ import { PriorityBadge, SlaBadge, StatusBadge } from '@/components/badges';
 import { EntityPicker } from '@/components/entity-picker';
 import { CustomFieldsEditor, CustomFieldsView } from '@/components/custom-fields';
 import { Action1Panel } from '@/components/action1-panel';
+import { AtlasTicketCard } from '@/components/atlas-panel';
 import { Timeline } from '@/components/tickets/timeline';
 import { LogTimeDialog } from '@/components/tickets/log-time-dialog';
 import { TicketChecklist } from '@/components/tickets/checklist';
@@ -347,6 +348,7 @@ export default function TicketDetailPage() {
           <TicketChecklist ticketId={id} canWrite={canWrite} />
           <ContactCard t={t} canWrite={canWrite} onChange={(contactId) => update.mutate({ contactId })} />
           <DeviceCard t={t} canWrite={canWrite} onChange={(configurationItemId) => update.mutate({ configurationItemId })} />
+          {t.tags.includes('atlas') && <AtlasTicketCard ticketId={t.id} />}
           <Card>
             <CardHeader title="Classification" />
             <CardBody className="space-y-2.5">

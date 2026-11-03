@@ -39,6 +39,7 @@ const Products = page(() => import('./pages/assets/products'));
 const AssetTypes = page(() => import('./pages/assets/asset-types'));
 const Software = page(() => import('./pages/assets/software'));
 const Action1Endpoints = page(() => import('./pages/integrations/action1-endpoints'));
+const AtlasIntegration = page(() => import('./pages/integrations/atlas'));
 const Contracts = page(() => import('./pages/business/contracts'));
 const ContractDetail = page(() => import('./pages/business/contract-detail'));
 const TimeEntries = page(() => import('./pages/business/time'));
@@ -145,6 +146,7 @@ export function App() {
         {r('/asset-types', AssetTypes, 'cis.read')}
         {r('/software', Software, 'cis.read')}
         {r('/integrations/action1/endpoints', Action1Endpoints, 'integrations.read')}
+        {r('/integrations/atlas', AtlasIntegration, 'integrations.read')}
         {r('/contracts', Contracts, 'contracts.read')}
         {r('/contracts/:id', ContractDetail, 'contracts.read')}
         {r('/time', TimeEntries, 'time.read')}

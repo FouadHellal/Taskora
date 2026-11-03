@@ -14,6 +14,7 @@ import { ConfirmDialog, Tabs, TabsContent, TabsList, TabsTrigger } from '@/compo
 import { Input, Select } from '@/components/ui/input';
 import { LifecycleBadge } from '@/components/badges';
 import { Action1Panel } from '@/components/action1-panel';
+import { AtlasCiPanel } from '@/components/atlas-panel';
 import { CiFormDialog, type CiRecord } from '@/components/forms/ci-form';
 import { CustomFieldsView } from '@/components/custom-fields';
 import { RelatedTickets } from '@/components/related-tables';
@@ -132,6 +133,13 @@ export default function CiDetailPage() {
             <CardHeader title="Action1 endpoint" description="Live device state synchronised from Action1 (read-only)" />
             <CardBody>
               <Action1Panel ciId={id} />
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader title="atlas observations" description="What atlas sees on the network and hypervisors (atlas-owned, read-only)" />
+            <CardBody>
+              <AtlasCiPanel ciId={id} />
             </CardBody>
           </Card>
 

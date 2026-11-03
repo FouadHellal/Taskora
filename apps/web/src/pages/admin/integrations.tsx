@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Plug, RefreshCw, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Plug, Radar, RefreshCw, ShieldCheck, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { ACTION1_REGIONS, SYNC_STATUS } from '@taskora/shared';
 import { api, ApiError, type Paginated } from '@/lib/api';
@@ -74,6 +74,7 @@ export default function IntegrationsPage() {
     <div>
       <PageHeader title="Integrations" icon={<Plug />} subtitle="Connect Taskora to your RMM and other tools" />
       <div className="space-y-4 p-5">
+        <AtlasCard />
         <Card>
           <CardHeader
             title={
@@ -126,6 +127,38 @@ export default function IntegrationsPage() {
         </Tabs>
       </div>
     </div>
+  );
+}
+
+function AtlasCard() {
+  const q = useQuery({ queryKey: ['atlas'], queryFn: () => api.get<{ settings: { enabled: boolean; cmdbMode: string }; incidents: { open: number; total: number }; status: { lastSuccessAt: string | null } }>('/integrations/atlas/settings') });
+  const a = q.data;
+  return (
+    <Card>
+      <CardHeader
+        title={
+          <span className="flex items-center gap-2">
+            <Radar className="size-4" /> atlas {a?.settings.enabled ? <Badge tone="success">Enabled</Badge> : <Badge>Disabled</Badge>}
+          </span>
+        }
+        description="Homelab monitoring — incidents become tickets, observed infrastructure reconciles with the CMDB"
+        actions={
+          <Link to="/integrations/atlas">
+            <Button size="sm">Open</Button>
+          </Link>
+        }
+      />
+      {a && (
+        <CardBody>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat label="Open incidents" value={a.incidents.open} tone={a.incidents.open ? 'warning' : undefined} />
+            <Stat label="Incidents total" value={a.incidents.total} />
+            <Stat label="CMDB" value={a.settings.cmdbMode.replace(/_/g, ' ')} />
+            <Stat label="Last contact" value={a.status.lastSuccessAt ? fmtRelative(a.status.lastSuccessAt) : '—'} />
+          </div>
+        </CardBody>
+      )}
+    </Card>
   );
 }
 
