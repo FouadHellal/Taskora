@@ -2,6 +2,33 @@
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-03
+
+### Added
+- **atlas integration** (Integrations → atlas, [docs/integrations/atlas.md](docs/integrations/atlas.md)):
+  atlas homelab incidents become one ticket each (idempotent, revision-ordered), with internal
+  notes on meaningful changes, recovery/reopen policies, priority per severity that respects
+  technician changes, and a "still failing" flag when a ticket is closed while atlas still sees
+  the problem. Technician activity flows back to atlas through a feed without echo.
+- **CMDB reconciliation with atlas**: preview/apply inventory syncs, MAC/serial matching within
+  the configured company, proposals for name-only matches, conflicts for ambiguity, optional
+  creation of unmanaged infrastructure, missing flags (no deletion), observed relations with
+  provenance, admin actions (link, create, unlink, ignore, decommissioned).
+- atlas panels on tickets (incident state, checks, evidence) and configuration items
+  (observations, Proxmox placement, network, relations, incidents, freshness).
+- **Integration tokens**: scoped, hashed, revocable, optionally expiring credentials for
+  machine clients (`Authorization: Bearer tki_…`), managed by `integrations.manage`.
+- Action1 sync matches existing CIs by MAC address (after serial, before host name) and takes
+  over CIs atlas created, so installing the agent later never duplicates a device.
+- `ci_relations` record their source (`manual`, `atlas`), detail and observation time.
+
+### Upgrade notes
+- Migration `0008_atlas_integration` adds `integration_tokens`, `atlas_incident_links`,
+  `atlas_entities` and three columns on `ci_relations` (existing relations become `manual`).
+  Rebuild and restart api and worker (`docker compose up -d --build`).
+
+## Earlier unreleased changes
+
 ### Added
 - Ticket CSV import (Tickets → Import, or Admin → Data Import) with notes, hours worked, created/resolved dates, status/priority mapping, optional creation of missing companies/contacts/picklist values, and safe re-import; ticket CSV export with a column chooser (adds description, notes, resolution and more). See [docs/ticket-import.md](docs/ticket-import.md).
 - Phone layout: below 768 px the sidebar becomes a slide-in menu (☰) and the header turns compact; below 640 px every list shows one card per row with a sort selector, and list filters fold behind a "Filters" button. Wide tables scroll inside their card instead of the page, dialogs use the dynamic viewport height, and form fields use 16 px text on touch screens so iOS Safari no longer zooms in. The customer portal header and ticket list wrap on phones.

@@ -10,6 +10,7 @@
 - **SLA engine** – server-side business-hours calendars (time zones, holidays), first-response and resolution targets per priority, automatic pause on waiting statuses, breach and at-risk monitoring with notifications.
 - **CRM** – companies (workspace with live KPIs), contacts, locations, activities, opportunities.
 - **CMDB** – configuration items with hardware/OS/network/warranty data, relationships, software, assigned contacts, ticket history.
+- **atlas integration** – homelab incidents become tickets (idempotent, recovery-aware, technician activity fed back), CMDB reconciliation with field ownership and conflict review, scoped integration tokens. See [docs/integrations/atlas.md](docs/integrations/atlas.md).
 - **Action1 integration (read-only)** – OAuth client, pagination, retries, explicit organization→company mapping, serial/hostname matching within a company only, conflict review, CI auto-creation, rename tracking, live device panel on CIs and tickets (agent status, last seen, reboot required, missing updates).
 - **Business** – contracts (T&M, fixed price, block hours, retainer, recurring, per ticket) with rates, blocks and services; time entries with timer and approvals; expenses; billing review; invoice drafts with PDF export.
 - **Projects** – projects, milestones, tasks, progress from logged time.
