@@ -71,7 +71,7 @@ export const atlasIncidentEventSchema = z.object({
     .default([]),
   evidence: z.array(shortText(400)).max(20).default([]),
   recentChanges: z.array(shortText(300)).max(15).default([]),
-  link: httpUrl.optional(),
+  link: httpUrl.nullish(),
   /** Test events never create a ticket; they only prove the path works. */
   test: z.boolean().default(false),
 });
