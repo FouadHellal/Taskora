@@ -266,6 +266,7 @@ function Tokens({ view, manage }: { view: View; manage: boolean }) {
     { header: 'State', cell: ({ row }) => (row.original.revokedAt ? <Badge tone="danger">revoked</Badge> : row.original.expiresAt && new Date(row.original.expiresAt) < new Date() ? <Badge tone="warning">expired</Badge> : <Badge tone="success">active</Badge>) },
     {
       header: '',
+      id: 'actions',
       cell: ({ row }) =>
         manage && !row.original.revokedAt ? (
           <Button size="sm" variant="ghost" loading={revoke.isPending} onClick={() => revoke.mutate(row.original.id)}>
@@ -354,6 +355,7 @@ function Incidents() {
     { header: 'Last observed', cell: ({ row }) => <span className="text-xs text-muted">{fmtRelative(row.original.lastObservedAt)}</span> },
     {
       header: '',
+      id: 'actions',
       cell: ({ row }) =>
         safeHref(row.original.link) ? (
           <a href={safeHref(row.original.link)!} target="_blank" rel="noreferrer noopener" className="text-xs text-primary hover:underline">
@@ -426,6 +428,7 @@ function Entities({ manage, companyId }: { manage: boolean; companyId: number | 
     { header: 'Freshness', cell: ({ row }) => <Badge tone={freshnessTone(row.original.freshness)}>{row.original.freshness}</Badge> },
     {
       header: '',
+      id: 'actions',
       cell: ({ row }) =>
         manage ? (
           <div className="flex flex-wrap justify-end gap-1">
