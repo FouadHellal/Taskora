@@ -20,6 +20,7 @@
   machine clients (`Authorization: Bearer tki_…`), managed by `integrations.manage`.
 - Action1 sync matches existing CIs by MAC address (after serial, before host name) and takes
   over CIs atlas created, so installing the agent later never duplicates a device.
+- The incident route accepts `POST` as well as `PUT` (same idempotent upsert).
 - `ci_relations` record their source (`manual`, `atlas`), detail and observation time.
 
 ### Upgrade notes

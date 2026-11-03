@@ -220,6 +220,15 @@ describe('incident → ticket', () => {
     expect(stale.body.applied).toBe(false);
   });
 
+  it('accepts POST as an alias of PUT (same idempotent semantics)', async () => {
+    const ev = incident(1, { lastObservedAt: '2026-11-03T03:00:00Z' });
+    const res = await call(ctx.app, 'POST', `/api/v1/integrations/atlas/v1/incidents/${INSTANCE}:1`, incidentToken, ev);
+    expect(res.status).toBe(200);
+    expect(res.body.applied).toBe(true);
+    expect((await call(ctx.app, 'POST', `/api/v1/integrations/atlas/v1/incidents/${INSTANCE}:1`, incidentToken, ev)).body.applied).toBe(false);
+    expect(await ctx.db.select().from(s.atlasIncidentLinks).where(eq(s.atlasIncidentLinks.externalKey, `${INSTANCE}:1`))).toHaveLength(1);
+  });
+
   it('validates input strictly', async () => {
     expect((await call(ctx.app, 'PUT', `/api/v1/integrations/atlas/v1/incidents/${INSTANCE}:5`, incidentToken, { ...incident(6) })).status).toBe(400);
     expect((await call(ctx.app, 'PUT', `/api/v1/integrations/atlas/v1/incidents/bad key`, incidentToken, incident(5))).status).toBe(400);

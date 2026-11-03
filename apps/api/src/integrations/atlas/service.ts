@@ -143,7 +143,8 @@ export const externalKeyOf = (ev: Pick<AtlasIncidentEvent, 'instance' | 'inciden
 
 /** What changed in a way worth a timeline note (not the "last observed" heartbeat). */
 function digest(ev: AtlasIncidentEvent): string {
-  const meaningful = { severity: ev.severity, state: ev.state, checks: ev.checks, evidence: ev.evidence, entity: ev.entity?.key ?? null, persisting: ev.persisting };
+  // `persisting` is handled by its own branch; it clearing again is not worth a note.
+  const meaningful = { severity: ev.severity, state: ev.state, checks: ev.checks, evidence: ev.evidence, entity: ev.entity?.key ?? null };
   return createHash('sha256').update(JSON.stringify(meaningful)).digest('hex').slice(0, 32);
 }
 

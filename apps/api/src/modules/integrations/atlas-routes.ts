@@ -64,10 +64,14 @@ export async function atlasRoutes(app: FastifyInstance) {
     },
   );
 
-  app.put(
-    '/integrations/atlas/v1/incidents/:key',
-    { config: { scope: 'atlas.incidents', rateLimit: PER_MINUTE }, bodyLimit: 256 * 1024 },
-    async (req, reply) => {
+  // PUT is the natural verb for this idempotent upsert; POST is accepted with identical
+  // semantics because atlas's HTTP client only sends GET and registered POST requests.
+  app.route({
+    method: ['PUT', 'POST'],
+    url: '/integrations/atlas/v1/incidents/:key',
+    config: { scope: 'atlas.incidents', rateLimit: PER_MINUTE },
+    bodyLimit: 256 * 1024,
+    handler: async (req, reply) => {
       const { key } = keyParam.parse(req.params);
       const ev = atlasIncidentEventSchema.parse(req.body);
       if (`${ev.instance}:${ev.incidentId}` !== key) throw badRequest('The URL key does not match the incident in the body');
@@ -77,7 +81,7 @@ export async function atlasRoutes(app: FastifyInstance) {
       const { createdTicketId: _ignored, ...body } = result;
       return reply.status(result.created ? 201 : 200).send(body);
     },
-  );
+  });
 
   app.get('/integrations/atlas/v1/incidents/:key', { config: { scope: 'atlas.incidents', rateLimit: PER_MINUTE } }, async (req) => {
     const { key } = keyParam.parse(req.params);

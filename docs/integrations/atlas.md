@@ -59,9 +59,10 @@ its deliveries queued until a new token is configured.
 Either scope. Returns `{ ok, integration: "atlas", apiVersion: 1, enabled, companyConfigured,
 autoCreateTickets, cmdbMode, scopes }`. atlas uses it for *Test connection*.
 
-### `PUT /api/v1/integrations/atlas/v1/incidents/:key` (`atlas.incidents`)
+### `PUT` or `POST /api/v1/integrations/atlas/v1/incidents/:key` (`atlas.incidents`)
 
-`key` = `<instance>:<incidentId>` (`^[a-z0-9][a-z0-9._-]{0,63}:[0-9]{1,18}$`), equal to the body's
+Both verbs have identical semantics (atlas uses POST: its HTTP client sends only GET and
+registered POST requests). `key` = `<instance>:<incidentId>` (`^[a-z0-9][a-z0-9._-]{0,63}:[0-9]{1,18}$`), equal to the body's
 `instance` and `incidentId`. The body is the **full current state** of the incident
 (`atlasIncidentEventSchema` in `packages/shared/src/atlas.ts`):
 
