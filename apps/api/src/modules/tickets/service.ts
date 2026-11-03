@@ -18,8 +18,15 @@ export interface TicketCtx {
   userId: number | null;
   /** True when the change originates from a workflow rule (prevents rule loops). */
   automation?: boolean;
+  /**
+   * Integration that caused the change (e.g. 'atlas'). Stored on the ticket events so the
+   * integration's own feed can skip them: no echo, no update loops between applications.
+   */
+  origin?: string;
   now?: Date;
 }
+
+const origin = (ctx: TicketCtx) => (ctx.origin ? { origin: ctx.origin } : {});
 
 const TRACKED: (keyof TicketRow)[] = [
   'title',
@@ -172,7 +179,7 @@ export async function createTicket(ctx: TicketCtx, raw: TicketInput | ParsedTick
     })
     .returning();
 
-  await event(db, ticket!.id, ctx.userId, 'created', { automation: !!ctx.automation }, now);
+  await event(db, ticket!.id, ctx.userId, 'created', { ...origin(ctx), automation: !!ctx.automation }, now);
   if (ticket!.assignedUserId) {
     await notifyFromTemplate(
       db,
@@ -254,7 +261,7 @@ export async function updateTicket(
       data.resolvedAt = null;
       data.closedAt = null;
       data.resolutionBreached = false;
-      await event(db, id, ctx.userId, 'reopened', { from: oldSt.name, to: newSt.name }, now);
+      await event(db, id, ctx.userId, 'reopened', { ...origin(ctx), from: oldSt.name, to: newSt.name }, now);
     }
     // SLA pause / resume.
     if (newSt.pausesSla && !before.slaPausedAt) data.slaPausedAt = now;
@@ -263,7 +270,7 @@ export async function updateTicket(
       data.slaPausedMinutes = pausedMinutes;
       data.slaPausedAt = null;
     }
-    await event(db, id, ctx.userId, isTerminal && !wasTerminal ? 'resolved' : 'status_changed', {
+    await event(db, id, ctx.userId, isTerminal && !wasTerminal ? 'resolved' : 'status_changed', { ...origin(ctx), 
       from: oldSt.name,
       to: newSt.name,
       fromId: oldSt.id,
@@ -308,11 +315,11 @@ export async function updateTicket(
   for (const key of changed) {
     if (key === 'statusId') continue;
     if (key === 'assignedUserId') {
-      await event(db, id, ctx.userId, 'assigned', { from: before.assignedUserId, to: data.assignedUserId, automation: !!ctx.automation }, now);
+      await event(db, id, ctx.userId, 'assigned', { ...origin(ctx), from: before.assignedUserId, to: data.assignedUserId, automation: !!ctx.automation }, now);
     } else if (key === 'description' || key === 'customFields') {
-      await event(db, id, ctx.userId, 'field_changed', { field: key }, now);
+      await event(db, id, ctx.userId, 'field_changed', { ...origin(ctx), field: key }, now);
     } else {
-      await event(db, id, ctx.userId, 'field_changed', {
+      await event(db, id, ctx.userId, 'field_changed', { ...origin(ctx), 
         field: key,
         from: (before as Record<string, unknown>)[key] ?? null,
         to: normalise((data as Record<string, unknown>)[key]),
@@ -351,7 +358,7 @@ export async function addTicketNote(
     .insert(s.ticketNotes)
     .values({ ticketId, userId: ctx.userId, body: input.body, visibility: input.visibility, kind: input.kind ?? 'note', createdAt: now })
     .returning();
-  await event(db, ticketId, ctx.userId, 'note_added', { noteId: note!.id, visibility: input.visibility }, now);
+  await event(db, ticketId, ctx.userId, 'note_added', { ...origin(ctx), noteId: note!.id, visibility: input.visibility }, now);
 
   // A customer-visible note from a technician is a first response.
   if (input.visibility === 'public' && !ticket.firstResponseAt && ctx.userId) {

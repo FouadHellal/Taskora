@@ -111,6 +111,11 @@ export const ciRelations = pgTable(
       .notNull()
       .references(() => configurationItems.id, { onDelete: 'cascade' }),
     type: text('type').notNull().default('connected_to'),
+    /** Provenance: 'manual' (a person) or an integration ('atlas') that observed the relation. */
+    source: text('source').notNull().default('manual'),
+    /** Integration detail (e.g. switch port), shown next to the relation. */
+    sourceDetail: text('source_detail'),
+    observedAt: timestamp('observed_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex('ci_relations_uq').on(t.ciId, t.relatedCiId, t.type)],

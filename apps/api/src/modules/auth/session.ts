@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, eq, gt, lt } from 'drizzle-orm';
 import { hasPermission, type Permission } from '@taskora/shared';
-import { roles, sessions, users } from '../../db/schema/index.js';
+import { integrationTokens, roles, sessions, users } from '../../db/schema/index.js';
 import { randomToken, sha256 } from '../../lib/crypto.js';
 import { forbidden, unauthorized } from '../../lib/errors.js';
 import type { AuthUser } from '../../lib/context.js';
@@ -43,6 +43,27 @@ export async function destroySession(app: FastifyInstance, req: FastifyRequest, 
   reply.clearCookie(SESSION_COOKIE, { path: '/' });
 }
 
+const TOKEN_RE = /^Bearer (tki_[A-Za-z0-9_-]{32,128})$/;
+
+/**
+ * Integration token check (docs/integrations/atlas.md): hashed lookup, not revoked or expired,
+ * and the route's scope granted. Same error for every failure so tokens cannot be probed.
+ */
+export async function authenticateIntegration(db: Db, req: FastifyRequest, scope: string | string[]) {
+  const m = TOKEN_RE.exec(String(req.headers.authorization ?? ''));
+  if (!m) throw unauthorized('Integration token required');
+  const [row] = await db.select().from(integrationTokens).where(eq(integrationTokens.tokenHash, sha256(m[1]!)));
+  const now = new Date();
+  if (!row || row.revokedAt || (row.expiresAt && row.expiresAt <= now)) throw unauthorized('Invalid integration token');
+  if (!([] as string[]).concat(scope).some((x) => row.scopes.includes(x))) {
+    throw forbidden('This integration token does not have the required scope');
+  }
+  if (!row.lastUsedAt || now.getTime() - row.lastUsedAt.getTime() > 60_000) {
+    await db.update(integrationTokens).set({ lastUsedAt: now, lastUsedIp: req.ip }).where(eq(integrationTokens.id, row.id));
+  }
+  return { tokenId: row.id, name: row.name, scopes: row.scopes };
+}
+
 export async function loadAuthUser(db: Db, userId: number): Promise<AuthUser | null> {
   const [row] = await db
     .select({
@@ -75,12 +96,18 @@ export function registerAuthHook(app: FastifyInstance) {
   app.decorateRequest('user', null);
   app.decorateRequest('sessionId', null);
   app.decorateRequest('csrfToken', null);
+  app.decorateRequest('integration', null);
 
   let lastCleanup = 0;
 
   app.addHook('preHandler', async (req) => {
     if (!req.url.startsWith('/api/')) return;
     const cfg = req.routeOptions.config ?? {};
+
+    if (cfg.scope) {
+      req.integration = await authenticateIntegration(app.db, req, cfg.scope);
+      return;
+    }
 
     const token = req.cookies[SESSION_COOKIE];
     if (token) {

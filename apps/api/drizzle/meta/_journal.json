@@ -57,6 +57,13 @@
       "when": 1792511966907,
       "tag": "0007_logos_backup",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793663459526,
+      "tag": "0008_atlas_integration",
+      "breakpoints": true
     }
   ]
 }

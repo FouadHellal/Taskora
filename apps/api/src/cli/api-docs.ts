@@ -32,11 +32,12 @@ const lines = [
   '- Lists: `?page=1&pageSize=50&sort=<field>&order=asc|desc&q=<search>` plus module filters; responses are `{ data, total, page, pageSize }`.',
   '- Errors: `{ error: { code, message, details?: { fields } } }` with HTTP 400 (validation), 401, 403, 404, 409 (duplicate / in use), 423 (locked account), 500.',
   '- Request bodies are validated with the Zod schemas in `packages/shared/src/schemas.ts`.',
+  '- Integration endpoints (`scope:` below) take `Authorization: Bearer tki_…` from an integration token (Integrations → atlas → Tokens) and ignore session cookies; see [integrations/atlas.md](integrations/atlas.md).',
   '',
 ];
 for (const [group, routes] of groups) {
   lines.push(`## ${group}`, '', '| Method | Path | Permission |', '| --- | --- | --- |');
-  for (const r of routes) lines.push(`| ${r.method} | \`${r.url}\` | ${r.public ? 'public' : r.perm ? `\`${r.perm}\`` : 'signed in'} |`);
+  for (const r of routes) lines.push(`| ${r.method} | \`${r.url}\` | ${r.public ? 'public' : r.scope ? `scope: ${[r.scope].flat().map((x) => `\`${x}\``).join(' or ')}` : r.perm ? `\`${r.perm}\`` : 'signed in'} |`);
   lines.push('');
 }
 const out = resolve(process.cwd(), process.argv[2] ?? '../../docs/api.md');

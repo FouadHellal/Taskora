@@ -37,14 +37,20 @@ export async function buildApp({ db, config, logger, mailTransport }: BuildOptio
   app.decorate('mailTransport', mailTransport ?? null);
 
   // Route catalogue (method, path, permission) used to generate docs/api.md.
-  const routeCatalog: { method: string; url: string; perm: string | null; public: boolean }[] = [];
+  const routeCatalog: { method: string; url: string; perm: string | null; public: boolean; scope?: string }[] = [];
   app.decorate('routeCatalog', routeCatalog);
   app.addHook('onRoute', (route) => {
     const methods = Array.isArray(route.method) ? route.method : [route.method];
-    const cfg = (route.config ?? {}) as { perm?: string | string[]; public?: boolean };
+    const cfg = (route.config ?? {}) as { perm?: string | string[]; public?: boolean; scope?: string | string[] };
     for (const method of methods) {
       if (method === 'HEAD') continue;
-      routeCatalog.push({ method, url: route.url, perm: cfg.perm ? ([] as string[]).concat(cfg.perm).join(' or ') : null, public: !!cfg.public });
+      routeCatalog.push({
+        method,
+        url: route.url,
+        perm: cfg.perm ? ([] as string[]).concat(cfg.perm).join(' or ') : null,
+        public: !!cfg.public,
+        ...(cfg.scope ? { scope: ([] as string[]).concat(cfg.scope).join(' or ') } : {}),
+      });
     }
   });
 
