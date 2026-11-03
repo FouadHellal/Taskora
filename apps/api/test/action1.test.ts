@@ -824,6 +824,21 @@ describe('Action1 sync and API', () => {
     await ctx.db.delete(s.jobs).where(eq(s.jobs.type, 'action1.sync'));
   });
 
+  it('reuses a CI atlas created for the device (MAC match) and takes ownership of it', async () => {
+    const vm = await makeCi(northstar.id, { name: 'ns-vm-07', hostname: 'ns-vm-07', source: 'atlas', macAddress: 'bc:24:11:00:00:07' });
+    const epId = 'e5a0c3f2-2222-4d7e-8f10-0b0b0b0b0071';
+    mock.endpoints[ORG_NS]!.push(endpoint(epId, ORG_NS, { name: 'NS-VM-07', device_name: 'NS-VM-07', MAC: 'BC-24-11-00-00-07', serial: 'VMware-42 00 07' }));
+    const cis = (await ctx.db.select().from(s.configurationItems)).length;
+    await syncInline();
+    const ep = await getEndpoint(epId);
+    expect(ep.matchStatus).toBe('matched');
+    expect(ep.matchNote).toMatch(/MAC address/);
+    expect(ep.configurationItemId).toBe(vm.id);
+    expect(await getCi(vm.id)).toMatchObject({ source: 'action1', name: 'NS-VM-07' });
+    expect((await ctx.db.select().from(s.configurationItems)).length).toBe(cis);
+    mock.endpoints[ORG_NS] = mock.endpoints[ORG_NS]!.filter((e) => e.id !== epId);
+  });
+
   it('records a failed run with a clear error for bad credentials', async () => {
     const put = await admin.put(api('/integrations/action1'), { enabled: true, region: 'eu', clientSecret: 'wrong-secret-value-2', matchByHostname: true });
     expect(put.status).toBe(200);

@@ -526,6 +526,14 @@ async function matchOrCreate(st: RunState, ep: EndpointRow, companyId: number, c
     if (await decide(cands, 'serial number')) return;
   }
 
+  // (b2) MAC address within the same company: reuses a CI atlas (or a person) created for the
+  // device before the agent was installed, instead of creating a duplicate.
+  const mac = normalMac(ep.macAddress);
+  if (mac) {
+    const cands = await select().where(and(eq(ci.companyId, companyId), sql`lower(replace(${ci.macAddress}, '-', ':')) = ${mac}`));
+    if (await decide(cands, 'MAC address')) return;
+  }
+
   // (c) host name / CI name within the same company, unique match only.
   if (settings.matchByHostname) {
     const names = [...new Set([ep.deviceName, ep.name].filter((x): x is string => !!x).map((x) => x.toLowerCase()))];
@@ -557,6 +565,14 @@ async function matchOrCreate(st: RunState, ep: EndpointRow, companyId: number, c
   }
 }
 
+/** `aa:bb:cc:dd:ee:ff` for a usable unicast MAC, else null (placeholders never match). */
+export function normalMac(raw: string | null | undefined): string | null {
+  const m = raw?.trim().toLowerCase().replace(/-/g, ':');
+  if (!m || !/^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/.test(m)) return null;
+  if (m === '00:00:00:00:00:00' || m === 'ff:ff:ff:ff:ff:ff') return null;
+  return m;
+}
+
 /** Refreshes Action1-sourced fields of a linked CI without overwriting with nulls. */
 async function updateLinkedCi(st: RunState, ep: EndpointRow, companyId: number, contactId: number | null) {
   const { db } = st;
@@ -575,7 +591,10 @@ async function updateLinkedCi(st: RunState, ep: EndpointRow, companyId: number, 
   if (ep.lastSeenAt && ep.lastSeenAt.getTime() !== ci.lastSeenAt?.getTime()) patch.lastSeenAt = ep.lastSeenAt;
   if (!ci.serialNumber && ep.serialNumber) patch.serialNumber = ep.serialNumber;
   if (!ci.manufacturer && ep.manufacturer) patch.manufacturer = ep.manufacturer;
-  if (ci.source === ACTION1_PROVIDER && ep.name && ep.name !== ci.name) patch.name = ep.name;
+  // A CI atlas created from observation becomes Action1's once the agent reports it (TASKORA_DECISIONS #25).
+  const adopt = ci.source === 'atlas';
+  if (adopt) patch.source = ACTION1_PROVIDER;
+  if ((ci.source === ACTION1_PROVIDER || adopt) && ep.name && ep.name !== ci.name) patch.name = ep.name;
   if (contactId && !ci.contactId) patch.contactId = contactId;
   if (!Object.keys(patch).length) return;
 
