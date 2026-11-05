@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.3.2] — 2026-11-05
+
+### Changed
+- Integrations → atlas refreshes its counts and incident list every 30 seconds (edits in the
+  settings form are kept).
+
 ## [0.3.1] — 2026-11-05
 
 ### Fixed
