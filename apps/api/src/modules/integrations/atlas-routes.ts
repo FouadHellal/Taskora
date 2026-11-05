@@ -32,6 +32,7 @@ import {
   incidentLookup,
   listEntities,
   newIntegrationToken,
+  recordContact,
   resolveEntity,
   saveAtlasSettings,
   syncInventory,
@@ -51,6 +52,7 @@ export async function atlasRoutes(app: FastifyInstance) {
     { config: { scope: ['atlas.incidents', 'atlas.cmdb'], rateLimit: PER_MINUTE } },
     async (req) => {
       const { settings } = await getAtlasSettings(app.db);
+      await recordContact(app.db, true);
       return {
         ok: true,
         integration: 'atlas',

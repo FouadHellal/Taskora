@@ -126,6 +126,8 @@ describe('integration tokens', () => {
 describe('incident → ticket', () => {
   it('refuses incidents while disabled or without a company, and test events never create tickets', async () => {
     expect((await put(incident(1))).status).toBe(409);
+    // The refusal is visible to the admin, not only to atlas.
+    expect((await admin.get('/api/v1/integrations/atlas/settings')).body.status.lastError).toMatch(/disabled/);
     await settings({ enabled: true });
     const noCompany = await put(incident(1));
     expect(noCompany.status).toBe(409);

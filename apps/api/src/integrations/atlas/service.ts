@@ -72,11 +72,15 @@ export async function saveAtlasSettings(db: Tx, settings: AtlasSettings) {
   return row!;
 }
 
-async function recordContact(db: Tx, ok: boolean, error?: string) {
+/** Last contact / last error shown on Integrations → atlas (also for refused calls). */
+export async function recordContact(db: Tx, ok: boolean, error?: string) {
+  const now = new Date();
+  const contact = ok ? { lastSyncAt: now, lastSuccessAt: now, lastError: null, status: 'connected' } : { lastSyncAt: now, lastError: error?.slice(0, 500) ?? null, status: 'error' };
+  // Upsert: atlas may call before an admin ever saved the settings; the page must still show it.
   await db
-    .update(s.integrations)
-    .set(ok ? { lastSyncAt: new Date(), lastSuccessAt: new Date(), lastError: null, status: 'connected' } : { lastSyncAt: new Date(), lastError: error?.slice(0, 500) ?? null, status: 'error' })
-    .where(eq(s.integrations.provider, ATLAS_PROVIDER));
+    .insert(s.integrations)
+    .values({ provider: ATLAS_PROVIDER, config: DEFAULT_ATLAS_SETTINGS as unknown as Record<string, unknown>, enabled: false, ...contact })
+    .onConflictDoUpdate({ target: s.integrations.provider, set: { ...contact, updatedAt: now } });
 }
 
 /* ------------------------------------------------------------------ incidents */
@@ -227,7 +231,11 @@ async function ciForEntity(db: Tx, instance: string, entityKey: string | undefin
 export async function applyIncidentEvent(db: Db, ev: AtlasIncidentEvent, actor: string): Promise<IncidentResult & { createdTicketId?: number }> {
   const key = externalKeyOf(ev);
   const { settings } = await getAtlasSettings(db);
-  if (!settings.enabled) throw new AppError(409, 'integration_disabled', 'The atlas integration is disabled in Taskora');
+  if (!settings.enabled) {
+    // Visible to the admin: atlas is trying, Taskora refuses.
+    await recordContact(db, false, 'atlas sent an incident, but the integration is disabled (tick "Accept incidents and inventory from atlas")');
+    throw new AppError(409, 'integration_disabled', 'The atlas integration is disabled in Taskora');
+  }
   if (ev.test) {
     await recordContact(db, true);
     return {
@@ -239,7 +247,10 @@ export async function applyIncidentEvent(db: Db, ev: AtlasIncidentEvent, actor: 
       note: settings.companyId ? 'Test event accepted: a real incident would create a ticket.' : 'Test event accepted, but no company is configured: real incidents would be refused.',
     };
   }
-  if (!settings.companyId) throw new AppError(409, 'not_configured', 'Choose the company for atlas tickets in Taskora (Integrations → atlas)');
+  if (!settings.companyId) {
+    await recordContact(db, false, 'atlas sent an incident, but no company is chosen for atlas tickets');
+    throw new AppError(409, 'not_configured', 'Choose the company for atlas tickets in Taskora (Integrations → atlas)');
+  }
   const companyId = settings.companyId;
 
   const result = await db.transaction(async (tx) => {
