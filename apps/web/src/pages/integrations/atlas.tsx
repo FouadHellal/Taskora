@@ -52,14 +52,16 @@ interface IncidentRow {
 
 type EntityRow = AtlasEntity & { ciNumber: string | null; ciName: string | null; configurationItemId: number | null; provenance: string };
 
+/** atlas reports every minute: keep the counts and incidents current without a reload. */
+const LIVE_MS = 30_000;
 const KINDS = ['pve-node', 'pve-vm', 'pve-lxc', 'linux-host', 'nas', 'unifi-switch', 'unifi-ap', 'unifi-gateway', 'client'];
 const matchTone = (s: string) => (s === 'conflict' ? 'danger' : s === 'proposed' ? 'warning' : s === 'linked' || s === 'created' ? 'success' : 'neutral') as 'danger' | 'warning' | 'success' | 'neutral';
 
 export default function AtlasIntegrationPage() {
   const { can } = useAuth();
   const manage = can('integrations.manage');
-  const q = useQuery({ queryKey: ['atlas'], queryFn: () => api.get<View>('/integrations/atlas/settings') });
-  const entities = useQuery({ queryKey: ['atlas-entity-counts'], queryFn: () => api.get<{ counts: Record<string, number> }>('/integrations/atlas/entities', { pageSize: 1 }) });
+  const q = useQuery({ queryKey: ['atlas'], queryFn: () => api.get<View>('/integrations/atlas/settings'), refetchInterval: LIVE_MS });
+  const entities = useQuery({ queryKey: ['atlas-entity-counts'], queryFn: () => api.get<{ counts: Record<string, number> }>('/integrations/atlas/entities', { pageSize: 1 }), refetchInterval: LIVE_MS });
   if (!q.data) return <PageLoader />;
   const v = q.data;
   const c = entities.data?.counts ?? {};
@@ -127,7 +129,8 @@ function SettingsForm({ view, manage }: { view: View; manage: boolean }) {
   const qc = useQueryClient();
   const lookups = useLookups();
   const [f, setF] = useState(view.settings);
-  useEffect(() => setF(view.settings), [view]);
+  // Only when the saved settings change (the view refreshes every 30 s with new contact times).
+  useEffect(() => setF(view.settings), [view.settings]);
   const set = <K extends keyof AtlasSettings>(k: K, val: AtlasSettings[K]) => setF((x) => ({ ...x, [k]: val }));
   const num = (v: string) => (v ? Number(v) : null);
   const save = useMutation({
@@ -320,7 +323,7 @@ function Tokens({ view, manage }: { view: View; manage: boolean }) {
 
 function Incidents() {
   const [openOnly, setOpenOnly] = useState(true);
-  const q = useQuery({ queryKey: ['atlas-incidents', openOnly], queryFn: () => api.get<{ data: IncidentRow[] }>('/integrations/atlas/incidents', { open: openOnly ? 'true' : undefined }) });
+  const q = useQuery({ queryKey: ['atlas-incidents', openOnly], queryFn: () => api.get<{ data: IncidentRow[] }>('/integrations/atlas/incidents', { open: openOnly ? 'true' : undefined }), refetchInterval: LIVE_MS });
   const cols: Column<IncidentRow>[] = [
     {
       header: 'Incident',
