@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-11-05
+
+### Fixed
+- Integrations → atlas: atlas's *Test connection* now counts as a contact (*Last contact*), and
+  refused incidents (integration disabled, no company chosen) show as the last error, even if
+  the atlas settings were never saved.
+
 ## [0.3.0] — 2026-11-03
 
 ### Added

@@ -1,7 +1,7 @@
 {
   "name": "taskora",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Taskora — self-hosted Professional Services Automation (PSA) for MSPs and IT service providers",
   "workspaces": [
     "packages/*",
