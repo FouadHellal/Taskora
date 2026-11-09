@@ -84,3 +84,7 @@ docs/           research, deployment guide
 ## Security
 
 Secrets come from the environment and are never committed. Integration credentials are encrypted at rest (AES-256-GCM). Passwords are hashed with Argon2id; sessions use httpOnly cookies with CSRF tokens; login is rate limited with account lockout. Taskora is private to your network by default — do not expose it to the internet without a TLS reverse proxy.
+
+## License
+
+[MIT](LICENSE)

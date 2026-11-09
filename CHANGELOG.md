@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- Taskora is released under the MIT license (`LICENSE`).
+
 ## [0.3.3] — 2026-11-09
 
 ### Fixed
