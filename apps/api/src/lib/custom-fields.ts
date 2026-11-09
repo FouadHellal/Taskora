@@ -7,12 +7,15 @@ import { AppError } from './errors.js';
 /**
  * Validates user-defined field values against the active definitions for an
  * entity. Unknown keys are dropped; values are coerced to their declared type.
+ * `enforceRequired: false` is for records an integration creates (a monitoring alert cannot
+ * answer a form): types are still checked, missing required values are left for a person.
  */
 export async function validateCustomFields(
   db: Tx,
   entity: CustomFieldEntity,
   values: Record<string, unknown> | undefined,
   existing: Record<string, unknown> = {},
+  { enforceRequired = true }: { enforceRequired?: boolean } = {},
 ): Promise<Record<string, unknown>> {
   const defs = await db
     .select()
@@ -24,14 +27,14 @@ export async function validateCustomFields(
 
   for (const def of defs) {
     if (!(def.key in input)) {
-      if (def.isRequired && (out[def.key] === undefined || out[def.key] === null || out[def.key] === '')) {
+      if (enforceRequired && def.isRequired && (out[def.key] === undefined || out[def.key] === null || out[def.key] === '')) {
         errors[`customFields.${def.key}`] = `${def.label} is required`;
       }
       continue;
     }
     const raw = input[def.key];
     if (raw === null || raw === undefined || raw === '') {
-      if (def.isRequired) errors[`customFields.${def.key}`] = `${def.label} is required`;
+      if (enforceRequired && def.isRequired) errors[`customFields.${def.key}`] = `${def.label} is required`;
       out[def.key] = null;
       continue;
     }

@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [0.3.3] — 2026-11-09
+
+### Fixed
+- atlas incidents that Taskora accepted without a ticket never got one: an incident sent while
+  *Create tickets automatically* was off, or whose ticket was deleted, now gets its ticket the
+  next time atlas sends it (atlas 0.12.1 re-sends such incidents every 30 minutes; *Re-send all*
+  works too). A ticket is still never created for an incident that has already recovered.
+- A required ticket custom field no longer makes Taskora refuse every atlas incident: tickets
+  atlas opens skip the required check (types are still validated; people fill the field in).
+- Refused atlas incidents (validation errors, ticket creation errors) are shown as the last
+  error on Integrations → atlas, with the incident key and the fields concerned.
+
 ## [0.3.2] — 2026-11-05
 
 ### Changed

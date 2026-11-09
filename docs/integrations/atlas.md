@@ -112,13 +112,18 @@ and network errors with backoff, and treats other 4xx as permanent (shown in atl
 **Idempotency and ordering.** One row per `externalKey` (unique), locked `FOR UPDATE` while an
 event is applied. `revision` is monotonic per incident: anything `<=` the stored revision is a
 no-op (`applied: false`), so retries, duplicate deliveries, replays after a restore and
-out-of-order arrivals never create a second ticket or undo a newer state.
+out-of-order arrivals never create a second ticket or undo a newer state. One exception: an
+open incident that has **no ticket** (it arrived while *Create tickets automatically* was off,
+or its ticket was deleted) gets one from any delivery, even of a revision already applied
+(`created: true`, `applied: false`); only the ticket is attached, the stored state is kept. A
+response with `ticket: null` for an open incident tells atlas to send it again later.
 
 **What an event does**
 
 | Situation | Effect |
 | --- | --- |
-| first open event, `autoCreateTickets` | ticket in the configured company/queue/type, source *Monitoring Alert*, tags `atlas` + kind, priority from the severity map, CI from the entity if atlas's entity is linked; workflow rules run as for any new ticket |
+| first open event, `autoCreateTickets` | ticket in the configured company/queue/type, source *Monitoring Alert*, tags `atlas` + kind, priority from the severity map, CI from the entity if atlas's entity is linked; workflow rules run as for any new ticket; required ticket custom fields are not enforced (left for a technician) |
+| open event, `autoCreateTickets` off | accepted, no ticket, `note` says why; the ticket is created by a later delivery once it is on |
 | meaningful change (title, summary, severity, checks, evidence, changes) | one **internal** note; heartbeats (`lastObservedAt` only) add nothing |
 | severity change | priority follows only if nobody changed it on the ticket |
 | `state: resolved` | internal recovery note; with *recoveryPolicy = resolve* the ticket moves to the resolved status |

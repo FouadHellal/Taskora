@@ -149,7 +149,8 @@ export async function createTicket(ctx: TicketCtx, raw: TicketInput | ParsedTick
   const contractId = input.contractId ?? (await defaultContractId(db, input.companyId));
   const slaId = await resolveSlaId(db, { slaId: input.slaId, contractId, companyId: input.companyId });
   const dues = await computeDueDates(db, { slaId, priorityId, createdAt: now, slaPausedMinutes: 0 });
-  const customFields = await validateCustomFields(db, 'ticket', input.customFields);
+  // Tickets an integration opens (atlas alerts) must not be refused over a required form field.
+  const customFields = await validateCustomFields(db, 'ticket', input.customFields, {}, { enforceRequired: !ctx.origin });
   const seq = await nextSequence(db, 'ticket');
 
   const terminal = status.category === 'resolved' || status.category === 'closed';

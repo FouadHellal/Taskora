@@ -238,6 +238,44 @@ describe('incident → ticket', () => {
     expect((await put(incident(7, { link: 'javascript:alert(1)' }))).status).toBe(400);
     const big = await call(ctx.app, 'PUT', `/api/v1/integrations/atlas/v1/incidents/${INSTANCE}:8`, incidentToken, { ...incident(8), summary: 'x'.repeat(300 * 1024) });
     expect(big.status).toBe(413);
+    // The admin sees why, not only atlas.
+    expect((await admin.get('/api/v1/integrations/atlas/settings')).body.status.lastError).toMatch(/incident atlas-home:7 refused: invalid link \(only http\(s\) links\)/);
+  });
+
+  it('creates the missing ticket when atlas re-sends an open incident it already has', async () => {
+    const netbox = () => incident(30, { revision: 1, kind: 'host.unreachable', fingerprint: 'host.unreachable:Netbox', title: 'Netbox does not answer SSH', entity: null, checks: [] });
+    await settings({ autoCreateTickets: false });
+    const off = await put(netbox());
+    expect(off.status).toBe(200);
+    expect(off.body.ticket).toBeNull();
+    expect(off.body.note).toMatch(/off/);
+    // Turned on later: the same revision again (atlas's periodic re-send or "Re-send all").
+    await settings({ autoCreateTickets: true });
+    const caught = await put(netbox());
+    expect(caught.status, JSON.stringify(caught.body)).toBe(201);
+    expect(caught.body).toMatchObject({ created: true, applied: false });
+    const again = await put(netbox());
+    expect(again.body).toMatchObject({ created: false, applied: false });
+    expect(again.body.ticket.id).toBe(caught.body.ticket.id);
+    expect(await ctx.db.select().from(s.tickets).where(eq(s.tickets.title, 'Netbox does not answer SSH'))).toHaveLength(1);
+    // Recovered before a ticket existed: a re-send creates nothing.
+    await settings({ autoCreateTickets: false });
+    await put(incident(31, { revision: 1, title: 'Blip' }));
+    await put(incident(31, { revision: 2, title: 'Blip', state: 'resolved', resolvedAt: '2026-11-03T01:06:00Z' }));
+    await settings({ autoCreateTickets: true });
+    expect((await put(incident(31, { revision: 1, title: 'Blip' }))).body.created).toBe(false);
+    expect(await ctx.db.select().from(s.tickets).where(eq(s.tickets.title, 'Blip'))).toHaveLength(0);
+  });
+
+  it('is not refused by a required ticket custom field (people still have to fill it)', async () => {
+    const [def] = await ctx.db.insert(s.customFieldDefinitions).values({ entity: 'ticket', key: 'site_code', label: 'Site code', type: 'text', isRequired: true }).returning();
+    try {
+      const res = await put(incident(32, { title: 'Disk / on tailscale is 91% full', kind: 'disk.full', severity: 'notice' }));
+      expect(res.status, JSON.stringify(res.body)).toBe(201);
+      expect((await tech.post('/api/v1/tickets', { title: 'Manual', companyId })).status).toBe(400);
+    } finally {
+      await ctx.db.update(s.customFieldDefinitions).set({ isActive: false }).where(eq(s.customFieldDefinitions.id, def!.id));
+    }
   });
 });
 

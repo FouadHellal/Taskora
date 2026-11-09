@@ -260,18 +260,21 @@ export async function applyIncidentEvent(db: Db, ev: AtlasIncidentEvent, actor: 
       .onConflictDoNothing({ target: s.atlasIncidentLinks.externalKey });
     const [link] = await tx.select().from(s.atlasIncidentLinks).where(eq(s.atlasIncidentLinks.externalKey, key)).for('update');
     if (!link) throw new AppError(500, 'internal', 'Incident link could not be locked');
-    if (ev.revision <= link.revision) {
-      return { applied: false, created: false, ticketId: link.ticketId, note: `Revision ${ev.revision} already applied (current ${link.revision})` };
+    let ticketId = link.ticketId;
+    if (ticketId && !(await tx.select({ id: s.tickets.id }).from(s.tickets).where(eq(s.tickets.id, ticketId)))[0]) ticketId = null;
+    // An open incident without a ticket (creation was off, or the ticket was deleted) gets one
+    // from any delivery, even a revision already applied: atlas's re-sends then catch up.
+    // A ticket is never (re)created for an incident that has already recovered.
+    const stale = ev.revision <= link.revision;
+    const catchUp = stale && !ticketId && settings.autoCreateTickets && ev.state !== 'resolved' && link.state !== 'resolved';
+    if (stale && !catchUp) {
+      return { applied: false, created: false, ticketId, note: `Revision ${ev.revision} already applied (current ${link.revision})` };
     }
 
     const ctx = { db: tx, userId: null, origin: ATLAS_ORIGIN };
     const ciId = await ciForEntity(tx, ev.instance, ev.entity?.key, companyId);
-    let ticketId = link.ticketId;
-    // A ticket deleted in Taskora is not recreated for an incident that has already recovered.
     let created = false;
     let note: string | undefined;
-    const ticketExists = ticketId ? !!(await tx.select({ id: s.tickets.id }).from(s.tickets).where(eq(s.tickets.id, ticketId)))[0] : false;
-    if (!ticketExists) ticketId = null;
 
     if (!ticketId && ev.state !== 'resolved' && settings.autoCreateTickets) {
       const priorityId = settings.priorityMap[ev.severity] ?? undefined;
@@ -330,33 +333,34 @@ export async function applyIncidentEvent(db: Db, ev: AtlasIncidentEvent, actor: 
       }
     }
 
+    // A catch-up only attaches the ticket: the stored state is as new as the event or newer.
+    const state = catchUp
+      ? {}
+      : {
+          entityKey: ev.entity?.key ?? null,
+          revision: ev.revision,
+          state: ev.state,
+          severity: ev.severity,
+          persisting: ev.persisting,
+          title: ev.title,
+          link: ev.link ?? null,
+          entity: ev.entity as unknown as Record<string, unknown> | null,
+          lastPayload: { digest: digest(ev), checks: ev.checks, evidence: ev.evidence, recentChanges: ev.recentChanges, summary: ev.summary },
+          firstObservedAt: new Date(ev.firstObservedAt),
+          lastObservedAt: new Date(ev.lastObservedAt),
+          resolvedAt: ev.resolvedAt ? new Date(ev.resolvedAt) : null,
+        };
     await tx
       .update(s.atlasIncidentLinks)
-      .set({
-        ticketId,
-        configurationItemId: ciId ?? link.configurationItemId,
-        entityKey: ev.entity?.key ?? null,
-        revision: ev.revision,
-        state: ev.state,
-        severity: ev.severity,
-        persisting: ev.persisting,
-        title: ev.title,
-        link: ev.link ?? null,
-        entity: ev.entity as unknown as Record<string, unknown> | null,
-        lastPayload: { digest: digest(ev), checks: ev.checks, evidence: ev.evidence, recentChanges: ev.recentChanges, summary: ev.summary },
-        firstObservedAt: new Date(ev.firstObservedAt),
-        lastObservedAt: new Date(ev.lastObservedAt),
-        resolvedAt: ev.resolvedAt ? new Date(ev.resolvedAt) : null,
-        updatedAt: new Date(),
-      })
+      .set({ ticketId, configurationItemId: ciId ?? link.configurationItemId, ...state, updatedAt: new Date() })
       .where(eq(s.atlasIncidentLinks.id, link.id));
     await audit(tx, null, {
       action: created ? 'create' : 'sync',
       entityType: 'atlas_incident',
       entityId: link.id,
-      summary: `${created ? 'Ticket created' : 'Updated'} from atlas incident ${key} (revision ${ev.revision}, ${ev.state}) via token "${actor}"`,
+      summary: `${created ? 'Ticket created' : 'Updated'} from atlas incident ${key} (revision ${ev.revision}, ${ev.state}${catchUp ? ', catch-up' : ''}) via token "${actor}"`,
     });
-    return { applied: true, created, ticketId, note };
+    return { applied: !catchUp, created, ticketId, note };
   });
   await recordContact(db, true);
   return {

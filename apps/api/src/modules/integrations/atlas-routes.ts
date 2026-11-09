@@ -20,7 +20,7 @@ import {
 import * as s from '../../db/schema/index.js';
 import { audit } from '../../lib/audit.js';
 import { currentUser } from '../../lib/context.js';
-import { badRequest, notFound } from '../../lib/errors.js';
+import { AppError, badRequest, notFound } from '../../lib/errors.js';
 import { idOf } from '../../lib/params.js';
 import { intParam } from '../../lib/query.js';
 import { runTicketRules } from '../automation/engine.js';
@@ -43,6 +43,16 @@ import {
 
 const PER_MINUTE = { max: 600, timeWindow: '1 minute' };
 const keyParam = z.object({ key: z.string().regex(ATLAS_EXTERNAL_KEY, 'external key is <instance>:<incident id>') });
+
+/** One line for the admin: the message plus the fields that failed validation. */
+function refusal(err: unknown): string {
+  if (err instanceof z.ZodError) return `invalid ${err.issues.slice(0, 3).map((i) => `${i.path.join('.')} (${i.message})`).join(', ')}`;
+  if (err instanceof AppError) {
+    const fields = (err.details as { fields?: Record<string, string> } | undefined)?.fields;
+    return fields ? `${err.message}: ${Object.values(fields).slice(0, 3).join(', ')}` : err.message;
+  }
+  return err instanceof Error ? err.message : 'internal error';
+}
 
 export async function atlasRoutes(app: FastifyInstance) {
   /* ---------------------------------------------------------------- machine API */
@@ -75,9 +85,17 @@ export async function atlasRoutes(app: FastifyInstance) {
     bodyLimit: 256 * 1024,
     handler: async (req, reply) => {
       const { key } = keyParam.parse(req.params);
-      const ev = atlasIncidentEventSchema.parse(req.body);
-      if (`${ev.instance}:${ev.incidentId}` !== key) throw badRequest('The URL key does not match the incident in the body');
-      const result = await applyIncidentEvent(app.db, ev, req.integration!.name);
+      let result: Awaited<ReturnType<typeof applyIncidentEvent>>;
+      try {
+        const ev = atlasIncidentEventSchema.parse(req.body);
+        if (`${ev.instance}:${ev.incidentId}` !== key) throw badRequest('The URL key does not match the incident in the body');
+        result = await applyIncidentEvent(app.db, ev, req.integration!.name);
+      } catch (err) {
+        // Shown on Integrations → atlas: otherwise only atlas knows a ticket was refused.
+        // (Disabled / no company record their own message.)
+        if (!(err instanceof AppError && err.statusCode === 409)) await recordContact(app.db, false, `atlas incident ${key} refused: ${refusal(err)}`);
+        throw err;
+      }
       // Workflow rules see atlas tickets like any new ticket (after the commit, loop-safe).
       if (result.createdTicketId) await runTicketRules(app.db, 'ticket.created', result.createdTicketId);
       const { createdTicketId: _ignored, ...body } = result;
