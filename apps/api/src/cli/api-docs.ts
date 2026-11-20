@@ -28,6 +28,8 @@ const lines = [
   '',
   '- Base path: `/api/v1`, JSON request and response bodies.',
   '- Authentication: session cookie `taskora_session` obtained from `POST /api/v1/auth/login` (`{ email, password }`). The response contains a `csrfToken`; send it as the `X-CSRF-Token` header on every POST/PUT/PATCH/DELETE.',
+  '- Automation (n8n, scripts): send `Authorization: Bearer tka_…` with a personal API key from Settings → API & webhooks instead of a session; the key acts as its owner (same permissions) and needs no CSRF header. See [n8n.md](n8n.md).',
+  '- Super administrators can add `?force=preview` / `?force=true` (and `&replaceWith=<id>` for picklists) to most DELETE endpoints to remove a record that is still referenced.',
   '- Authorization: each endpoint requires the listed permission (roles are managed in Administration → Users & Roles). Endpoints without a permission require any signed-in user; `public` endpoints need no session.',
   '- Lists: `?page=1&pageSize=50&sort=<field>&order=asc|desc&q=<search>` plus module filters; responses are `{ data, total, page, pageSize }`.',
   '- Errors: `{ error: { code, message, details?: { fields } } }` with HTTP 400 (validation), 401, 403, 404, 409 (duplicate / in use), 423 (locked account), 500.',
