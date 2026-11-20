@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AppWindow,
   BookOpen,
   Building2,
   Clock,
@@ -12,8 +13,10 @@ import {
   Link2,
   Lock,
   Mail,
+  MessageSquarePlus,
   MoreHorizontal,
   Paperclip,
+  Pencil,
   Phone,
   Play,
   Plus,
@@ -28,18 +31,23 @@ import { api, ApiError } from '@/lib/api';
 import { useAuth, useMe } from '@/lib/auth';
 import { byId, opts, useLookups, userOpts } from '@/lib/lookups';
 import { cn, fmtDateTime, fmtRelative, toLocalInput } from '@/lib/utils';
+import { notifyOpener, openInMainWindow, ticketOpenMode, TicketLink } from '@/lib/open-ticket';
+import { useNarrow } from '@/hooks/use-media-query';
 import { Button } from '@/components/ui/button';
-import { Input, Select, Textarea } from '@/components/ui/input';
+import { Input, Select } from '@/components/ui/input';
 import { Badge, Card, CardBody, CardHeader, Field, PageLoader, EmptyState } from '@/components/ui/misc';
 import { ConfirmDialog, Dialog, DropdownContent, DropdownItem, DropdownMenu, DropdownSeparator, DropdownTrigger, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/overlays';
 import { PriorityBadge, SlaBadge, StatusBadge } from '@/components/badges';
 import { EntityPicker } from '@/components/entity-picker';
-import { CustomFieldsEditor, CustomFieldsView } from '@/components/custom-fields';
+import { customFieldTabs, CustomFieldsEditor, CustomFieldsView } from '@/components/custom-fields';
 import { Action1Panel } from '@/components/action1-panel';
 import { AtlasTicketCard } from '@/components/atlas-panel';
-import { Timeline } from '@/components/tickets/timeline';
+import { NotesList, Timeline } from '@/components/tickets/timeline';
 import { LogTimeDialog } from '@/components/tickets/log-time-dialog';
 import { TicketChecklist } from '@/components/tickets/checklist';
+import { TimeEntriesPanel } from '@/components/tickets/time-entries-panel';
+import { NoteBody } from '@/components/tickets/note-body';
+import { ImageTextarea } from '@/components/tickets/image-paste';
 import { useTimer } from '@/components/layout/timer-widget';
 import { handleFormError } from '@/components/form';
 import type { TicketDetail, TimelineItem } from '@/components/tickets/ticket-types';
@@ -62,25 +70,71 @@ interface CiSummary {
   stats: { openTickets: number; totalTickets: number };
 }
 
-export default function TicketDetailPage() {
+/* The main area's tabs; the last chosen one is remembered per user. */
+const BASE_TABS = ['notes', 'time', 'activity', 'files', 'related', 'kb'];
+const TAB_STORAGE = 'taskora-ticket-tab';
+
+function readTab(pref: unknown): string {
+  try {
+    const saved = localStorage.getItem(TAB_STORAGE);
+    if (saved) return saved;
+  } catch {
+    /* ignore */
+  }
+  return typeof pref === 'string' && pref ? pref : 'notes';
+}
+
+export const ticketQuery = (id: number) => ({ queryKey: ['ticket', id], queryFn: () => api.get<TicketDetail>(`/tickets/${id}`) });
+
+/**
+ * Ticket workspace. `standalone` is the ticket's own window (/t/:id): links to
+ * other pages open in the main window and deleting/merging closes or moves
+ * the window instead of going back to the ticket list.
+ */
+export default function TicketDetailPage({ standalone = false }: { standalone?: boolean }) {
   const id = Number(useParams().id);
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { can } = useAuth();
+  const { can, refresh: refreshMe } = useAuth();
+  const me = useMe();
+  const narrow = useNarrow();
   const lookups = useLookups();
   const L = lookups.data;
   const canWrite = can('tickets.write');
+  const goMain = (to: string) => (standalone ? openInMainWindow(to) : navigate(to));
 
-  const ticket = useQuery({ queryKey: ['ticket', id], queryFn: () => api.get<TicketDetail>(`/tickets/${id}`) });
+  const ticket = useQuery(ticketQuery(id));
   const timeline = useQuery({ queryKey: ['timeline', id], queryFn: () => api.get<{ data: TimelineItem[] }>(`/tickets/${id}/timeline`) });
+  const attachments = useQuery({ queryKey: ['attachments', 'ticket', id], queryFn: () => api.get<{ data: AttachmentRow[] }>(`/attachments/ticket/${id}`) });
+  const relations = useQuery({ queryKey: ['relations', id], queryFn: () => api.get<{ data: Relation[] }>(`/tickets/${id}/relations`) });
+  const articles = useQuery({ queryKey: ['ticket-kb', id], queryFn: () => api.get<{ data: { id: number; articleNumber: string; title: string }[] }>(`/tickets/${id}/kb`) });
   const [filter, setFilter] = useState<'all' | 'notes' | 'public' | 'history' | 'time'>('all');
+  const [noteFilter, setNoteFilter] = useState<'all' | 'internal' | 'public'>('all');
+  const [tab, setTabState] = useState(() => readTab(me.preferences.ticketTab));
+  const [composerFocus, setComposerFocus] = useState(0);
   const [logTime, setLogTime] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [resolveOpen, setResolveOpen] = useState<number | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editDescription, setEditDescription] = useState(false);
+  const [editResolution, setEditResolution] = useState(false);
   const [mergeOpen, setMergeOpen] = useState(false);
   const [mergeTarget, setMergeTarget] = useState<number | null>(null);
+  const tabsRef = useRef<HTMLDivElement>(null);
+
+  const setTab = (v: string) => {
+    setTabState(v);
+    try {
+      localStorage.setItem(TAB_STORAGE, v);
+    } catch {
+      /* ignore */
+    }
+    api.patch('/auth/preferences', { ticketTab: v }).catch(() => undefined);
+  };
+  const jumpTo = (v: string) => {
+    setTab(v);
+    requestAnimationFrame(() => tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  };
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['ticket', id] });
@@ -114,7 +168,10 @@ export default function TicketDetailPage() {
       toast.success('Tickets merged');
       setMergeOpen(false);
       qc.invalidateQueries({ queryKey: ['tickets'] });
-      navigate(`/tickets/${r.ticketId}`);
+      if (standalone) {
+        notifyOpener({ type: 'taskora:ticket-changed', ticketId: id });
+        navigate(`/t/${r.ticketId}`, { replace: true });
+      } else navigate(`/tickets/${r.ticketId}`);
     },
     onError: (e) => handleFormError(e),
   });
@@ -123,7 +180,20 @@ export default function TicketDetailPage() {
     onSuccess: () => {
       toast.success('Ticket deleted');
       qc.invalidateQueries({ queryKey: ['tickets'] });
-      navigate('/tickets');
+      if (standalone) {
+        notifyOpener({ type: 'taskora:ticket-changed', ticketId: id });
+        window.close();
+        // A window the user opened by hand cannot be closed by script.
+        if (!window.closed) navigate('/tickets', { replace: true });
+      } else navigate('/tickets');
+    },
+    onError: (e) => handleFormError(e),
+  });
+  const setOpenMode = useMutation({
+    mutationFn: (mode: 'window' | 'same') => api.patch('/auth/preferences', { ticketOpenMode: mode }),
+    onSuccess: async (_r, mode) => {
+      await refreshMe();
+      toast.success(mode === 'window' ? 'Tickets now open in their own window' : 'Tickets now open in the main window');
     },
     onError: (e) => handleFormError(e),
   });
@@ -133,17 +203,35 @@ export default function TicketDetailPage() {
   }, [ticket.data]);
 
   if (ticket.isLoading) return <PageLoader />;
-  if (ticket.isError || !ticket.data) return <EmptyState title="Ticket not found" action={<Button onClick={() => navigate('/tickets')}>Back to tickets</Button>} />;
+  if (ticket.isError || !ticket.data)
+    return (
+      <EmptyState
+        title="Ticket not found"
+        action={standalone ? <Button onClick={() => window.close()}>Close window</Button> : <Button onClick={() => navigate('/tickets')}>Back to tickets</Button>}
+      />
+    );
   const t = ticket.data;
   const isDone = t.statusCategory === 'resolved' || t.statusCategory === 'closed';
+  const items = timeline.data?.data ?? [];
+  const noteCount = items.filter((i) => i.kind === 'note').length;
+  const timeCount = items.filter((i) => i.kind === 'time').length;
+  const cfTabs = customFieldTabs(L?.customFields, 'ticket');
+  const activeTab = BASE_TABS.includes(tab) || (tab.startsWith('cf:') && cfTabs.includes(tab.slice(3))) ? tab : 'notes';
+  const openMode = ticketOpenMode(me);
 
   const changeStatus = (statusId: number) => {
     const st = byId(L?.statuses, statusId);
     if (st && (st.category === 'resolved' || st.category === 'closed') && !t.resolution) return setResolveOpen(statusId);
     update.mutate({ statusId });
   };
+  const newNote = () => {
+    jumpTo('notes');
+    setComposerFocus((n) => n + 1);
+  };
 
   const timerOnThis = timer.data?.ticketId === id;
+  const estimateMinutes = t.estimatedHours ? t.estimatedHours * 60 : 0;
+  const effort = estimateMinutes ? Math.min(100, Math.round((t.minutesWorked / estimateMinutes) * 100)) : 0;
 
   return (
     <div className="flex min-h-full flex-col">
@@ -173,6 +261,21 @@ export default function TicketDetailPage() {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <InlineTitle value={t.title} disabled={!canWrite} onSave={(title) => update.mutate({ title })} />
           <div className="flex flex-wrap items-center gap-2">
+            {canWrite && (
+              <Button variant="primary" onClick={newNote}>
+                <MessageSquarePlus /> New note
+              </Button>
+            )}
+            {can('time.write') && (
+              <Button onClick={() => setLogTime(true)}>
+                <Clock /> New time entry
+              </Button>
+            )}
+            {canWrite && (
+              <Button onClick={() => setEmailOpen(true)}>
+                <Mail /> Send e-mail
+              </Button>
+            )}
             {can('time.write') &&
               (timerOnThis ? (
                 <Badge tone="primary" className="h-8 px-2.5">
@@ -183,16 +286,6 @@ export default function TicketDetailPage() {
                   <Play /> Start timer
                 </Button>
               ))}
-            {can('time.write') && (
-              <Button onClick={() => setLogTime(true)}>
-                <Clock /> Log time
-              </Button>
-            )}
-            {canWrite && (
-              <Button onClick={() => setEmailOpen(true)}>
-                <Mail /> Send e-mail
-              </Button>
-            )}
             <Button onClick={() => watch.mutate(!t.isWatching)} loading={watch.isPending}>
               {t.isWatching ? <EyeOff /> : <Eye />} {t.isWatching ? 'Unwatch' : 'Watch'}
             </Button>
@@ -204,7 +297,7 @@ export default function TicketDetailPage() {
               </DropdownTrigger>
               <DropdownContent>
                 {canWrite && (
-                  <DropdownItem onSelect={() => navigate(`/tickets/new?companyId=${t.companyId}${t.contactId ? `&contactId=${t.contactId}` : ''}`)}>
+                  <DropdownItem onSelect={() => goMain(`/tickets/new?companyId=${t.companyId}${t.contactId ? `&contactId=${t.contactId}` : ''}`)}>
                     <Plus /> New ticket for this customer
                   </DropdownItem>
                 )}
@@ -215,12 +308,17 @@ export default function TicketDetailPage() {
                 )}
                 <DropdownItem
                   onSelect={() => {
-                    navigator.clipboard?.writeText(window.location.href);
+                    navigator.clipboard?.writeText(`${window.location.origin}/tickets/${id}`);
                     toast.success('Link copied');
                   }}
                 >
                   <Link2 /> Copy link
                 </DropdownItem>
+                {!narrow && (
+                  <DropdownItem onSelect={() => setOpenMode.mutate(openMode === 'window' ? 'same' : 'window')}>
+                    <AppWindow /> Open tickets in their own window {openMode === 'window' && '✓'}
+                  </DropdownItem>
+                )}
                 {can('tickets.delete') && (
                   <>
                     <DropdownSeparator />
@@ -233,45 +331,66 @@ export default function TicketDetailPage() {
             </DropdownMenu>
           </div>
         </div>
-        {/* quick fields */}
-        <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px]">
-          <QuickSelect label="Status" disabled={!canWrite} value={t.statusId} options={opts(L?.statuses, t.statusId)} onChange={(v) => v && changeStatus(v)}>
+
+        {/* summary strip: the key facts at a glance; counts jump to their tab */}
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-9">
+          <SelectTile label="Status" disabled={!canWrite} value={t.statusId} options={opts(L?.statuses, t.statusId)} onChange={(v) => v && changeStatus(v)}>
             <StatusBadge name={t.statusName} color={t.statusColor} />
-          </QuickSelect>
-          <QuickSelect label="Priority" disabled={!canWrite} value={t.priorityId} options={opts(L?.priorities, t.priorityId)} onChange={(v) => v && update.mutate({ priorityId: v })}>
+          </SelectTile>
+          <SelectTile label="Priority" disabled={!canWrite} value={t.priorityId} options={opts(L?.priorities, t.priorityId)} onChange={(v) => v && update.mutate({ priorityId: v })}>
             <PriorityBadge name={t.priorityName} color={t.priorityColor} level={t.priorityLevel} />
-          </QuickSelect>
-          <QuickSelect
+          </SelectTile>
+          <SelectTile
             label="Assigned"
             disabled={!canWrite}
             value={t.assignedUserId}
             options={userOpts(L?.users, t.assignedUserId)}
             allowEmpty="Unassigned"
             onChange={(v) => update.mutate({ assignedUserId: v })}
+            extra={!t.assignedUserId && canWrite ? <AssignToMe ticketId={id} onDone={refresh} /> : null}
           >
-            <span className={cn(!t.assigneeName && 'text-subtle')}>{t.assigneeName ?? 'Unassigned'}</span>
-          </QuickSelect>
-          <QuickSelect label="Queue" disabled={!canWrite} value={t.queueId} options={opts(L?.queues, t.queueId)} allowEmpty="No queue" onChange={(v) => update.mutate({ queueId: v })}>
-            <span>{t.queueName ?? '—'}</span>
-          </QuickSelect>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] uppercase tracking-wide text-subtle">SLA</span>
+            <span className={cn('truncate', !t.assigneeName && 'text-subtle')}>{t.assigneeName ?? 'Unassigned'}</span>
+          </SelectTile>
+          <SelectTile label="Queue" disabled={!canWrite} value={t.queueId} options={opts(L?.queues, t.queueId)} allowEmpty="No queue" onChange={(v) => update.mutate({ queueId: v })}>
+            <span className="truncate">{t.queueName ?? '—'}</span>
+          </SelectTile>
+          <Tile label="SLA">
             <SlaBadge state={t.sla.overall} due={isDone ? null : !t.firstResponseAt ? t.firstResponseDueAt : t.resolutionDueAt} />
-          </div>
-          {!t.assignedUserId && canWrite && <AssignToMe ticketId={id} onDone={refresh} />}
+          </Tile>
+          <Tile label="Worked / estimate" onClick={() => jumpTo('time')}>
+            <span className="tabular-nums">
+              {formatMinutes(t.minutesWorked)}
+              <span className="text-muted"> / {t.estimatedHours ? `${t.estimatedHours} h` : '—'}</span>
+            </span>
+            {estimateMinutes > 0 && (
+              <span className="mt-1 block h-1 overflow-hidden rounded-full bg-surface-2">
+                <span className={cn('block h-full rounded-full', t.minutesWorked > estimateMinutes ? 'bg-danger' : 'bg-primary')} style={{ width: `${effort}%` }} />
+              </span>
+            )}
+          </Tile>
+          <Tile label="Notes" onClick={() => jumpTo('notes')}>
+            <span className="tabular-nums">{noteCount}</span>
+          </Tile>
+          <Tile label="Time entries" onClick={() => jumpTo('time')}>
+            <span className="tabular-nums">{timeCount}</span>
+          </Tile>
+          <Tile label="Attachments" onClick={() => jumpTo('files')}>
+            <span className="tabular-nums">{attachments.data?.data.length ?? '—'}</span>
+          </Tile>
         </div>
       </div>
 
       {/* -------------------------------------------------------------- body */}
-      <div className="grid flex-1 gap-4 p-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid flex-1 items-start gap-4 p-4 xl:grid-cols-[340px_minmax(0,1fr)]">
         <div className="min-w-0 space-y-4">
           <Card>
             <CardHeader
               title="Description"
               actions={
-                canWrite && !editDescription && (
+                canWrite &&
+                !editDescription && (
                   <Button size="sm" variant="ghost" onClick={() => setEditDescription(true)}>
-                    Edit
+                    <Pencil /> Edit
                   </Button>
                 )
               }
@@ -279,72 +398,135 @@ export default function TicketDetailPage() {
             <CardBody>
               {editDescription ? (
                 <EditText
+                  ticketId={id}
                   initial={t.description ?? ''}
                   rows={8}
                   onCancel={() => setEditDescription(false)}
                   onSave={(description) => update.mutate({ description }, { onSuccess: () => setEditDescription(false) })}
                 />
               ) : t.description ? (
-                <p className="prose-note text-[13px]">{t.description}</p>
+                <NoteBody text={t.description} className="text-[13px]" />
               ) : (
                 <p className="text-xs text-muted">No description.</p>
               )}
               {(t.resolution || isDone) && (
                 <div className="mt-4 rounded-md border border-success/30 bg-success-soft/50 p-3">
-                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-success">Resolution</div>
-                  {t.resolution ? <p className="prose-note text-[13px]">{t.resolution}</p> : <p className="text-xs text-muted">No resolution recorded.</p>}
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-success">Resolution</span>
+                    {canWrite && !editResolution && (
+                      <Button size="sm" variant="ghost" className="ml-auto h-6" onClick={() => setEditResolution(true)}>
+                        <Pencil /> Edit
+                      </Button>
+                    )}
+                  </div>
+                  {editResolution ? (
+                    <EditText
+                      ticketId={id}
+                      initial={t.resolution ?? ''}
+                      rows={5}
+                      onCancel={() => setEditResolution(false)}
+                      onSave={(resolution) => update.mutate({ resolution }, { onSuccess: () => setEditResolution(false) })}
+                    />
+                  ) : t.resolution ? (
+                    <NoteBody text={t.resolution} className="text-[13px]" />
+                  ) : (
+                    <p className="text-xs text-muted">No resolution recorded.</p>
+                  )}
                 </div>
               )}
             </CardBody>
           </Card>
 
-          {canWrite && <Composer ticket={t} onPosted={refresh} onResolveRequired={(sid) => setResolveOpen(sid)} />}
-
-          <Card>
-            <Tabs defaultValue="activity">
-              <div className="px-2">
-                <TabsList className="border-b-0">
-                  <TabsTrigger value="activity" count={timeline.data?.data.length}>
-                    Activity
-                  </TabsTrigger>
-                  <TabsTrigger value="related">Related tickets</TabsTrigger>
-                  <TabsTrigger value="files">Attachments</TabsTrigger>
-                  <TabsTrigger value="kb">Knowledge</TabsTrigger>
-                </TabsList>
-              </div>
-              <TabsContent value="activity" className="border-t border-border p-4">
-                <div className="mb-3 flex flex-wrap gap-1">
-                  {(
-                    [
-                      ['all', 'Everything'],
-                      ['notes', 'All notes'],
-                      ['public', 'Customer-visible'],
-                      ['time', 'Time entries'],
-                      ['history', 'History'],
-                    ] as const
-                  ).map(([k, label]) => (
-                    <Button key={k} size="sm" variant={filter === k ? 'subtle' : 'ghost'} onClick={() => setFilter(k)}>
-                      {label}
-                    </Button>
-                  ))}
+          <div ref={tabsRef} className="scroll-mt-4">
+            <Card>
+              <Tabs value={activeTab} onValueChange={setTab}>
+                <div className="px-2">
+                  <TabsList className="border-b-0">
+                    <TabsTrigger value="notes" count={noteCount}>
+                      Notes
+                    </TabsTrigger>
+                    <TabsTrigger value="time" count={timeCount}>
+                      Time entries
+                    </TabsTrigger>
+                    <TabsTrigger value="activity" count={timeline.data?.data.length}>
+                      Activity
+                    </TabsTrigger>
+                    <TabsTrigger value="files" count={attachments.data?.data.length}>
+                      Attachments
+                    </TabsTrigger>
+                    <TabsTrigger value="related" count={relations.data?.data.length}>
+                      Related tickets
+                    </TabsTrigger>
+                    <TabsTrigger value="kb" count={articles.data?.data.length}>
+                      Knowledge
+                    </TabsTrigger>
+                    {cfTabs.map((name) => (
+                      <TabsTrigger key={name} value={`cf:${name}`}>
+                        {name}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
                 </div>
-                {timeline.isLoading ? <PageLoader /> : <Timeline ticketId={id} items={timeline.data?.data ?? []} filter={filter} />}
-              </TabsContent>
-              <TabsContent value="related" className="border-t border-border p-4">
-                <RelatedTickets ticket={t} canWrite={canWrite} />
-              </TabsContent>
-              <TabsContent value="files" className="border-t border-border p-4">
-                <Attachments entityType="ticket" entityId={id} canWrite={canWrite} onChange={refresh} />
-              </TabsContent>
-              <TabsContent value="kb" className="border-t border-border p-4">
-                <LinkedArticles ticketId={id} canWrite={canWrite} />
-              </TabsContent>
-            </Tabs>
-          </Card>
+                <TabsContent value="notes" className="space-y-4 border-t border-border p-4">
+                  {canWrite && <Composer ticket={t} focusSignal={composerFocus} onPosted={refresh} onResolveRequired={(sid) => setResolveOpen(sid)} />}
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className="mr-2 text-[11px] font-semibold uppercase tracking-wide text-subtle">Notes · newest first</span>
+                    {(
+                      [
+                        ['all', 'All'],
+                        ['internal', 'Internal'],
+                        ['public', 'Customer-visible'],
+                      ] as const
+                    ).map(([k, label]) => (
+                      <Button key={k} size="sm" variant={noteFilter === k ? 'subtle' : 'ghost'} onClick={() => setNoteFilter(k)}>
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                  {timeline.isLoading ? <PageLoader /> : <NotesList ticketId={id} items={items} visibility={noteFilter} />}
+                </TabsContent>
+                <TabsContent value="time" className="border-t border-border p-4">
+                  {timeline.isLoading ? <PageLoader /> : <TimeEntriesPanel ticketId={id} items={items} onNew={() => setLogTime(true)} />}
+                </TabsContent>
+                <TabsContent value="activity" className="border-t border-border p-4">
+                  <div className="mb-3 flex flex-wrap gap-1">
+                    {(
+                      [
+                        ['all', 'Everything'],
+                        ['notes', 'All notes'],
+                        ['public', 'Customer-visible'],
+                        ['time', 'Time entries'],
+                        ['history', 'History'],
+                      ] as const
+                    ).map(([k, label]) => (
+                      <Button key={k} size="sm" variant={filter === k ? 'subtle' : 'ghost'} onClick={() => setFilter(k)}>
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                  {timeline.isLoading ? <PageLoader /> : <Timeline ticketId={id} items={items} filter={filter} />}
+                </TabsContent>
+                <TabsContent value="files" className="border-t border-border p-4">
+                  <Attachments entityType="ticket" entityId={id} canWrite={canWrite} onChange={refresh} />
+                </TabsContent>
+                <TabsContent value="related" className="border-t border-border p-4">
+                  <RelatedTickets ticket={t} canWrite={canWrite} />
+                </TabsContent>
+                <TabsContent value="kb" className="border-t border-border p-4">
+                  <LinkedArticles ticketId={id} canWrite={canWrite} />
+                </TabsContent>
+                {cfTabs.map((name) => (
+                  <TabsContent key={name} value={`cf:${name}`} className="border-t border-border p-4">
+                    <CustomFieldTab t={t} tab={name} canWrite={canWrite} onSave={(customFields, done) => update.mutate({ customFields }, { onSuccess: done })} />
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </Card>
+          </div>
         </div>
 
-        {/* ------------------------------------------------------ side panel */}
-        <aside className="space-y-4">
+        {/* ------------------------------------------------- details (left) */}
+        <aside className="space-y-4 xl:order-first">
           <TicketChecklist ticketId={id} canWrite={canWrite} />
           <ContactCard t={t} canWrite={canWrite} onChange={(contactId) => update.mutate({ contactId })} />
           <DeviceCard t={t} canWrite={canWrite} onChange={(configurationItemId) => update.mutate({ configurationItemId })} />
@@ -439,6 +621,7 @@ export default function TicketDetailPage() {
       {canWrite && <SendEmailDialog ticket={t} open={emailOpen} onOpenChange={setEmailOpen} onSent={refresh} />}
       {resolveOpen !== null && (
         <ResolveDialog
+          ticketId={id}
           statusId={resolveOpen}
           statusName={byId(L?.statuses, resolveOpen)?.name ?? 'Resolved'}
           initial={t.resolution ?? ''}
@@ -489,6 +672,71 @@ export default function TicketDetailPage() {
   );
 }
 
+/* ------------------------------------------------------------ summary tiles */
+
+const tileClass = 'relative min-w-0 rounded-md border border-border bg-surface-2/40 px-3 py-2 text-left';
+const tileLabel = 'mb-0.5 block text-[11px] uppercase tracking-wide text-subtle';
+
+function Tile({ label, children, onClick }: { label: string; children: ReactNode; onClick?: () => void }) {
+  if (!onClick)
+    return (
+      <div className={tileClass}>
+        <span className={tileLabel}>{label}</span>
+        <div className="flex min-h-5 items-center text-[13px] font-medium">{children}</div>
+      </div>
+    );
+  return (
+    <button type="button" onClick={onClick} className={cn(tileClass, 'cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2')}>
+      <span className={tileLabel}>{label}</span>
+      <span className="block min-h-5 text-[13px] font-medium">{children}</span>
+    </button>
+  );
+}
+
+/** A tile whose value is changed with an (invisible, full-size) select. */
+function SelectTile({
+  label,
+  value,
+  options,
+  onChange,
+  children,
+  disabled,
+  allowEmpty,
+  extra,
+}: {
+  label: string;
+  value: number | null;
+  options: { value: string | number; label: string }[];
+  onChange: (v: number | null) => void;
+  children: ReactNode;
+  disabled?: boolean;
+  allowEmpty?: string;
+  extra?: ReactNode;
+}) {
+  return (
+    <div className={cn(tileClass, !disabled && 'cursor-pointer transition-colors hover:border-border-strong hover:bg-surface-2')}>
+      <span className={tileLabel}>{label}</span>
+      <div className="flex min-h-5 min-w-0 items-center gap-1 text-[13px] font-medium">{children}</div>
+      {!disabled && (
+        <select
+          aria-label={label}
+          className="absolute inset-0 cursor-pointer opacity-0"
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+        >
+          {allowEmpty && <option value="">{allowEmpty}</option>}
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      )}
+      {extra && <div className="relative z-10 mt-1">{extra}</div>}
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ pieces */
 
 function InlineTitle({ value, onSave, disabled }: { value: string; onSave: (v: string) => void; disabled?: boolean }) {
@@ -525,46 +773,6 @@ function InlineTitle({ value, onSave, disabled }: { value: string; onSave: (v: s
   );
 }
 
-function QuickSelect({
-  label,
-  value,
-  options,
-  onChange,
-  children,
-  disabled,
-  allowEmpty,
-}: {
-  label: string;
-  value: number | null;
-  options: { value: string | number; label: string }[];
-  onChange: (v: number | null) => void;
-  children: React.ReactNode;
-  disabled?: boolean;
-  allowEmpty?: string;
-}) {
-  return (
-    <label className={cn('relative flex items-center gap-1.5', !disabled && 'cursor-pointer')}>
-      <span className="text-[11px] uppercase tracking-wide text-subtle">{label}</span>
-      <span className={cn('rounded px-1 py-0.5', !disabled && 'hover:bg-surface-2')}>{children}</span>
-      {!disabled && (
-        <select
-          aria-label={label}
-          className="absolute inset-0 cursor-pointer opacity-0"
-          value={value ?? ''}
-          onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-        >
-          {allowEmpty && <option value="">{allowEmpty}</option>}
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      )}
-    </label>
-  );
-}
-
 function SideSelect({ label, value, options, onChange, disabled }: { label: string; value: number | null; options: { value: string | number; label: string }[]; onChange: (v: number | null) => void; disabled?: boolean }) {
   return (
     <div className="grid grid-cols-[110px_1fr] items-center gap-2">
@@ -578,19 +786,20 @@ function AssignToMe({ ticketId, onDone }: { ticketId: number; onDone: () => void
   const me = useMe();
   const m = useMutation({ mutationFn: () => api.patch(`/tickets/${ticketId}`, { assignedUserId: me.user.id }), onSuccess: onDone });
   return (
-    <Button size="sm" variant="subtle" onClick={() => m.mutate()} loading={m.isPending}>
+    <Button size="sm" variant="subtle" className="h-6 px-2 text-[11px]" onClick={() => m.mutate()} loading={m.isPending}>
       <UserRound /> Assign to me
     </Button>
   );
 }
 
-function EditText({ initial, onSave, onCancel, rows = 4 }: { initial: string; onSave: (v: string) => void; onCancel: () => void; rows?: number }) {
+function EditText({ ticketId, initial, onSave, onCancel, rows = 4 }: { ticketId: number; initial: string; onSave: (v: string) => void; onCancel: () => void; rows?: number }) {
   const [v, setV] = useState(initial);
+  const [busy, setBusy] = useState(false);
   return (
     <div className="space-y-2">
-      <Textarea value={v} rows={rows} onChange={(e) => setV(e.target.value)} autoFocus />
+      <ImageTextarea ticketId={ticketId} value={v} rows={rows} onValueChange={setV} onBusyChange={setBusy} autoFocus />
       <div className="flex gap-2">
-        <Button size="sm" variant="primary" onClick={() => onSave(v)}>
+        <Button size="sm" variant="primary" disabled={busy} onClick={() => onSave(v)}>
           Save
         </Button>
         <Button size="sm" onClick={onCancel}>
@@ -602,16 +811,20 @@ function EditText({ initial, onSave, onCancel, rows = 4 }: { initial: string; on
 }
 
 /** Note composer: internal or customer-visible note, optional status change. */
-function Composer({ ticket, onPosted, onResolveRequired }: { ticket: TicketDetail; onPosted: () => void; onResolveRequired: (statusId: number) => void }) {
+function Composer({ ticket, focusSignal, onPosted, onResolveRequired }: { ticket: TicketDetail; focusSignal: number; onPosted: () => void; onResolveRequired: (statusId: number) => void }) {
   const lookups = useLookups();
   const [body, setBody] = useState('');
   const [visibility, setVisibility] = useState<'internal' | 'public'>('internal');
   const [statusId, setStatusId] = useState('');
   const [logTime, setLogTime] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const me = useMe();
   const canMail = me.emailEnabled && !!ticket.contactEmail;
   const [mailContact, setMailContact] = useState(true);
   const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (focusSignal) ref.current?.focus();
+  }, [focusSignal]);
   const post = useMutation({
     mutationFn: () =>
       api.post(`/tickets/${ticket.id}/notes`, { body, visibility, statusId: statusId ? Number(statusId) : null, notifyContact: visibility === 'public' && canMail && mailContact }),
@@ -624,7 +837,7 @@ function Composer({ ticket, onPosted, onResolveRequired }: { ticket: TicketDetai
     onError: (e) => handleFormError(e),
   });
   const submit = () => {
-    if (!body.trim()) return;
+    if (!body.trim() || uploading) return;
     const st = byId(lookups.data?.statuses, statusId ? Number(statusId) : null);
     if (st && (st.category === 'resolved' || st.category === 'closed') && !ticket.resolution) {
       post.mutate(undefined, { onSuccess: () => onResolveRequired(st.id) });
@@ -633,7 +846,7 @@ function Composer({ ticket, onPosted, onResolveRequired }: { ticket: TicketDetai
     post.mutate();
   };
   return (
-    <Card className={cn(visibility === 'public' && 'border-primary/40')}>
+    <div className={cn('rounded-md border border-border bg-surface', visibility === 'public' && 'border-primary/40')}>
       <div className="flex items-center gap-1 border-b border-border px-3 py-1.5">
         <Button size="sm" variant={visibility === 'internal' ? 'subtle' : 'ghost'} onClick={() => setVisibility('internal')}>
           <Lock /> Internal note
@@ -641,14 +854,16 @@ function Composer({ ticket, onPosted, onResolveRequired }: { ticket: TicketDetai
         <Button size="sm" variant={visibility === 'public' ? 'subtle' : 'ghost'} onClick={() => setVisibility('public')} className={cn(visibility === 'public' && 'text-primary')}>
           <Eye /> Customer-visible
         </Button>
-        <span className="ml-auto text-[11px] text-subtle">Ctrl+Enter to post</span>
+        <span className="ml-auto hidden text-[11px] text-subtle sm:inline">Ctrl+Enter to post</span>
       </div>
       <div className="p-3">
-        <Textarea
+        <ImageTextarea
           ref={ref}
+          ticketId={ticket.id}
           rows={3}
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onValueChange={setBody}
+          onBusyChange={setUploading}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submit();
           }}
@@ -668,19 +883,35 @@ function Composer({ ticket, onPosted, onResolveRequired }: { ticket: TicketDetai
               E-mail to {ticket.contactEmail}
             </label>
           )}
-          <Button size="sm" variant="primary" className="ml-auto" disabled={!body.trim()} loading={post.isPending} onClick={submit}>
+          <Button size="sm" variant="primary" className="ml-auto" disabled={!body.trim() || uploading} loading={post.isPending} onClick={submit}>
             Post note
           </Button>
         </div>
       </div>
       <LogTimeDialog open={logTime} onOpenChange={setLogTime} ticketId={ticket.id} defaultDescription={body} />
-    </Card>
+    </div>
   );
 }
 
-function ResolveDialog({ statusName, initial, onClose, onSave, loading }: { statusId: number; statusName: string; initial: string; onClose: () => void; onSave: (resolution: string, addNote: boolean) => void; loading: boolean }) {
+function ResolveDialog({
+  ticketId,
+  statusName,
+  initial,
+  onClose,
+  onSave,
+  loading,
+}: {
+  ticketId: number;
+  statusId: number;
+  statusName: string;
+  initial: string;
+  onClose: () => void;
+  onSave: (resolution: string, addNote: boolean) => void;
+  loading: boolean;
+}) {
   const [resolution, setResolution] = useState(initial);
   const [note, setNote] = useState(true);
+  const [uploading, setUploading] = useState(false);
   return (
     <Dialog
       open
@@ -690,14 +921,14 @@ function ResolveDialog({ statusName, initial, onClose, onSave, loading }: { stat
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" disabled={!resolution.trim()} loading={loading} onClick={() => onSave(resolution.trim(), note)}>
+          <Button variant="primary" disabled={!resolution.trim() || uploading} loading={loading} onClick={() => onSave(resolution.trim(), note)}>
             Resolve ticket
           </Button>
         </>
       }
     >
       <div className="space-y-3">
-        <Textarea rows={6} value={resolution} onChange={(e) => setResolution(e.target.value)} placeholder="Root cause and the fix applied…" />
+        <ImageTextarea ticketId={ticketId} rows={6} value={resolution} onValueChange={setResolution} onBusyChange={setUploading} placeholder="Root cause and the fix applied…" />
         <label className="flex items-center gap-2 text-[13px]">
           <input type="checkbox" checked={note} onChange={(e) => setNote(e.target.checked)} className="accent-[var(--primary)]" /> Also post the resolution as a customer-visible note
         </label>
@@ -917,7 +1148,8 @@ function CustomFieldsCard({ t, canWrite, onSave }: { t: TicketDetail; canWrite: 
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(t.customFields);
   useEffect(() => setValue(t.customFields), [t.customFields]);
-  if (!(lookups.data?.customFields ?? []).some((d) => d.entity === 'ticket' && d.isActive)) return null;
+  // Fields with a tab name are shown on their own tab instead.
+  if (!(lookups.data?.customFields ?? []).some((d) => d.entity === 'ticket' && d.isActive && !d.tab?.trim())) return null;
   return (
     <Card>
       <CardHeader
@@ -932,14 +1164,54 @@ function CustomFieldsCard({ t, canWrite, onSave }: { t: TicketDetail; canWrite: 
       />
       <CardBody>
         {editing ? (
-          <CustomFieldsEditor entity="ticket" value={value} onChange={setValue} />
+          <CustomFieldsEditor entity="ticket" tab={null} value={value} onChange={setValue} />
         ) : (
           <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5">
-            <CustomFieldsView entity="ticket" value={t.customFields} />
+            <CustomFieldsView entity="ticket" tab={null} value={t.customFields} />
           </dl>
         )}
       </CardBody>
     </Card>
+  );
+}
+
+/** The custom fields of one tab (custom field definitions with that `tab` name). */
+function CustomFieldTab({ t, tab, canWrite, onSave }: { t: TicketDetail; tab: string; canWrite: boolean; onSave: (v: Record<string, unknown>, done: () => void) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(t.customFields);
+  useEffect(() => setValue(t.customFields), [t.customFields]);
+  return (
+    <div className="space-y-3">
+      {canWrite && (
+        <div className="flex justify-end gap-2">
+          {editing && (
+            <Button
+              size="sm"
+              onClick={() => {
+                setValue(t.customFields);
+                setEditing(false);
+              }}
+            >
+              Cancel
+            </Button>
+          )}
+          <Button size="sm" variant={editing ? 'primary' : 'secondary'} onClick={() => (editing ? onSave(value, () => setEditing(false)) : setEditing(true))}>
+            {editing ? 'Save' : (
+              <>
+                <Pencil /> Edit
+              </>
+            )}
+          </Button>
+        </div>
+      )}
+      {editing ? (
+        <CustomFieldsEditor entity="ticket" tab={tab} title={tab} value={value} onChange={setValue} />
+      ) : (
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-2.5 lg:grid-cols-3">
+          <CustomFieldsView entity="ticket" tab={tab} value={t.customFields} />
+        </dl>
+      )}
+    </div>
   );
 }
 
@@ -993,9 +1265,9 @@ function RelatedTickets({ ticket, canWrite }: { ticket: TicketDetail; canWrite: 
           {rel.data!.data.map((r) => (
             <li key={r.id} className="flex items-center gap-3 px-3 py-2 text-[13px]">
               <Badge>{TICKET_RELATION_TYPE.labels[r.type as keyof typeof TICKET_RELATION_TYPE.labels] ?? r.type}</Badge>
-              <Link to={`/tickets/${r.ticketId}`} className="min-w-0 flex-1 truncate hover:text-primary">
+              <TicketLink ticketId={r.ticketId} className="min-w-0 flex-1 truncate hover:text-primary">
                 <span className="font-mono text-xs text-muted">{r.ticketNumber}</span> {r.title}
-              </Link>
+              </TicketLink>
               <StatusBadge name={r.statusName} color={r.statusColor} />
               {canWrite && (
                 <Button size="icon-sm" variant="ghost" onClick={() => remove.mutate(r.id)} aria-label="Remove relation">

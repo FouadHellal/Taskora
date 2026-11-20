@@ -94,17 +94,17 @@ export function useOpenLink() {
 }
 
 /** A link to a ticket that honours the open-in-window preference. */
-export function TicketLink({ id, onClick, children, ...rest }: { id: number } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>) {
+export function TicketLink({ ticketId, onClick, children, ...rest }: { ticketId: number } & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>) {
   const openTicket = useOpenTicket();
   return (
     <a
-      href={`/tickets/${id}`}
+      href={`/tickets/${ticketId}`}
       {...rest}
       onClick={(e) => {
         onClick?.(e);
         if (e.defaultPrevented || withModifier(e) || e.button !== 0) return;
         e.preventDefault();
-        openTicket(id);
+        openTicket(ticketId);
       }}
     >
       {children}
