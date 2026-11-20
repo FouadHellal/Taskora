@@ -6,6 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { logoUrl } from '@/components/logo';
+import { translate as t } from '@/lib/i18n';
 
 export function AuthCard({ title, subtitle, logo, children }: { title: string; subtitle?: string; logo?: string | null; children: React.ReactNode }) {
   return (
@@ -16,11 +17,11 @@ export function AuthCard({ title, subtitle, logo, children }: { title: string; s
           {!logo && <span className="text-xl font-semibold tracking-tight">Taskora</span>}
         </div>
         <div className="rounded-xl border border-border bg-surface p-6 shadow-card">
-          <h1 className="text-base font-semibold">{title}</h1>
-          {subtitle && <p className="mt-1 text-[13px] text-muted">{subtitle}</p>}
+          <h1 className="text-base font-semibold">{t(title)}</h1>
+          {subtitle && <p className="mt-1 text-[13px] text-muted">{t(subtitle)}</p>}
           <div className="mt-5">{children}</div>
         </div>
-        <p className="mt-4 text-center text-[11px] text-subtle">Self-hosted professional services automation</p>
+        <p className="mt-4 text-center text-[11px] text-subtle">{t('Self-hosted professional services automation')}</p>
       </div>
     </div>
   );
@@ -50,14 +51,14 @@ export default function LoginPage() {
       await qc.invalidateQueries({ queryKey: ['me'] });
       navigate((location.state as { from?: string })?.from ?? '/', { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Unable to sign in');
+      setError(err instanceof ApiError ? t(err.message) : t('Unable to sign in'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <AuthCard title={`Sign in to ${setup.data?.organizationName ?? 'Taskora'}`} logo={logoUrl('organization', 0, setup.data?.logoUpdatedAt)}>
+    <AuthCard title={t('Sign in to {name}', { name: setup.data?.organizationName ?? 'Taskora' })} logo={logoUrl('organization', 0, setup.data?.logoUpdatedAt)}>
       <form onSubmit={submit} className="space-y-3">
         <div>
           <Label htmlFor="email">E-mail</Label>

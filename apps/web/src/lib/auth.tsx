@@ -18,7 +18,16 @@ export interface Me {
   csrfToken: string;
   preferences: Record<string, unknown>;
   emailEnabled: boolean;
-  organization: { name: string; currency: string; timezone: string; logoUpdatedAt?: string | null };
+  organization: {
+    name: string;
+    currency: string;
+    timezone: string;
+    logoUpdatedAt?: string | null;
+    /** Default UI language of the organization ('en' | 'fr' | 'nl' | 'de' | 'es'). */
+    language?: 'en' | 'fr' | 'nl' | 'de' | 'es';
+    /** 'auto' (language default) or an explicit date pattern. */
+    dateFormat?: 'auto' | 'dd/MM/yyyy' | 'MM/dd/yyyy' | 'yyyy-MM-dd' | 'dd.MM.yyyy';
+  };
 }
 
 interface AuthState {

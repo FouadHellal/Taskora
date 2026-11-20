@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog } from '../ui/overlays';
 import { Kbd } from '../ui/misc';
+import { translate as t } from '@/lib/i18n';
 
 const SHORTCUTS: [string, string][] = [
   ['Ctrl / ⌘ + K', 'Search everything'],
@@ -66,7 +67,7 @@ export function ShortcutsDialog({ open, onOpenChange }: { open: boolean; onOpenC
       <dl className="divide-y divide-border">
         {SHORTCUTS.map(([k, label]) => (
           <div key={label + k} className="flex items-center justify-between py-1.5 text-[13px]">
-            <dt className="text-muted">{label}</dt>
+            <dt className="text-muted">{t(label)}</dt>
             <dd>
               <Kbd>{k}</Kbd>
             </dd>

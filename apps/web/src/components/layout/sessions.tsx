@@ -3,6 +3,7 @@ import { Laptop, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
+import { translate as t } from '@/lib/i18n';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/misc';
 import { Dialog } from '../ui/overlays';
@@ -18,10 +19,10 @@ interface SessionRow {
 }
 
 function describeAgent(ua: string | null) {
-  if (!ua) return 'Unknown device';
+  if (!ua) return t('Unknown device');
   const browser = /Edg\//.test(ua) ? 'Edge' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
   const os = /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /Android/.test(ua) ? 'Android' : /iPhone|iPad/.test(ua) ? 'iOS' : /Linux/.test(ua) ? 'Linux' : '';
-  return `${browser}${os ? ` on ${os}` : ''}`;
+  return os ? t('{browser} on {os}', { browser, os }) : browser;
 }
 
 export function SessionsDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
@@ -30,7 +31,7 @@ export function SessionsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
   const revoke = useMutation({
     mutationFn: (id: string) => api.delete(`/auth/sessions/${id}`),
     onSuccess: () => {
-      toast.success('Signed out');
+      toast.success(t('Signed out'));
       qc.invalidateQueries({ queryKey: ['my-sessions'] });
     },
   });
@@ -56,14 +57,14 @@ export function SessionsDialog({ open, onOpenChange }: { open: boolean; onOpenCh
             <Laptop className="size-4 text-muted" />
             <div className="min-w-0 flex-1">
               <div className="font-medium">
-                {describeAgent(s.userAgent)} {s.current && <Badge tone="success">This device</Badge>}
+                {describeAgent(s.userAgent)} {s.current && <Badge tone="success">{t('This device')}</Badge>}
               </div>
-              <div className="text-xs text-muted" title={`Signed in ${fmtDateTime(s.createdAt)}`}>
-                {s.ip ?? 'unknown IP'} · active {fmtRelative(s.lastSeenAt)} · expires {fmtRelative(s.expiresAt)}
+              <div className="text-xs text-muted" title={t('Signed in {date}', { date: fmtDateTime(s.createdAt) })}>
+                {s.ip ?? t('unknown IP')} · {t('active {when}', { when: fmtRelative(s.lastSeenAt) })} · {t('expires {when}', { when: fmtRelative(s.expiresAt) })}
               </div>
             </div>
             {!s.current && (
-              <Button size="sm" variant="ghost" onClick={() => revoke.mutate(s.id)} aria-label="Sign out session">
+              <Button size="sm" variant="ghost" onClick={() => revoke.mutate(s.id)} aria-label={t('Sign out session')}>
                 <LogOut /> Sign out
               </Button>
             )}

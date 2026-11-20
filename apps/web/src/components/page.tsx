@@ -2,6 +2,7 @@ import { Children, Fragment, isValidElement, type ReactElement, type ReactNode }
 import { Link } from 'react-router-dom';
 import { ChevronRight, Search, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { translate, translateNode } from '@/lib/i18n';
 import { useEffect, useState } from 'react';
 import { usePhone } from '@/hooks/use-media-query';
 
@@ -20,9 +21,10 @@ export function PageHeader({
   icon?: ReactNode;
   children?: ReactNode;
 }) {
+  const shownTitle = translateNode(title);
   useEffect(() => {
-    if (typeof title === 'string') document.title = `${title} · Taskora`;
-  }, [title]);
+    if (typeof shownTitle === 'string') document.title = `${shownTitle} · Taskora`;
+  }, [shownTitle]);
   return (
     <div className="border-b border-border bg-surface px-5 pt-3">
       {breadcrumbs && (
@@ -32,10 +34,10 @@ export function PageHeader({
               {i > 0 && <ChevronRight className="size-3" />}
               {b.to ? (
                 <Link to={b.to} className="hover:text-foreground">
-                  {b.label}
+                  {translate(b.label)}
                 </Link>
               ) : (
-                <span>{b.label}</span>
+                <span>{translate(b.label)}</span>
               )}
             </span>
           ))}
@@ -45,8 +47,8 @@ export function PageHeader({
         <div className="flex min-w-0 items-center gap-3">
           {icon && <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary [&_svg]:size-5">{icon}</div>}
           <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold tracking-tight">{title}</h1>
-            {subtitle && <div className="mt-0.5 text-[13px] text-muted">{subtitle}</div>}
+            <h1 className="truncate text-lg font-semibold tracking-tight">{shownTitle}</h1>
+            {subtitle && <div className="mt-0.5 text-[13px] text-muted">{translateNode(subtitle)}</div>}
           </div>
         </div>
         {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
@@ -101,7 +103,7 @@ function PhoneToolbar({ toolbar }: { toolbar: ReactNode }) {
             open ? 'bg-primary-soft text-primary' : 'bg-surface-2 text-muted',
           )}
         >
-          <SlidersHorizontal className="size-4" /> Filters
+          <SlidersHorizontal className="size-4" /> {translate('Filters')}
         </button>
       </div>
       {open && <div className="mt-2 grid grid-cols-2 gap-2 [&>*]:w-full [&>*]:min-w-0">{rest}</div>}
@@ -124,7 +126,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search…', classN
       <input
         value={local}
         onChange={(e) => setLocal(e.target.value)}
-        placeholder={placeholder}
+        placeholder={translate(placeholder)}
         className="h-8 w-full rounded-md border border-border-strong bg-surface pl-8 pr-2 text-[13px] placeholder:text-subtle focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
       />
     </div>
@@ -155,7 +157,7 @@ export function FilterSelect({
         className,
       )}
     >
-      <option value="">{placeholder}</option>
+      <option value="">{translate(placeholder)}</option>
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}

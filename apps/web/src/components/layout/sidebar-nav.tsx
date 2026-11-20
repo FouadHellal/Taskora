@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { cn } from '@/lib/utils';
+import { translate as t } from '@/lib/i18n';
 import { isActive, isGroup, NAV, type NavGroup, type NavItem, type NavSection } from './nav';
 import { DropdownContent, DropdownItem, DropdownLabel, DropdownMenu, DropdownSeparator, DropdownTrigger, Tooltip } from '../ui/overlays';
 
@@ -56,7 +57,7 @@ function ItemLink({ item, counts, nested }: { item: NavItem; counts: Counts; nes
       }
     >
       <Icon className={cn('shrink-0 opacity-80', nested ? 'size-3.5' : 'size-4')} />
-      <span className="truncate">{item.label}</span>
+      <span className="truncate">{t(item.label)}</span>
       <CountBadge item={item} counts={counts} />
     </NavLink>
   );
@@ -78,7 +79,7 @@ function GroupRow({ group, open, onToggle, counts, active }: { group: NavGroup; 
         )}
       >
         <Icon className="size-4 shrink-0 opacity-80" />
-        <span className="truncate">{group.label}</span>
+        <span className="truncate">{t(group.label)}</span>
         {badged && <CountBadge item={badged} counts={counts} />}
         <ChevronRight className={cn('size-3.5 shrink-0 opacity-50 transition-transform', !badged && 'ml-auto', open && 'rotate-90')} />
       </button>
@@ -144,7 +145,7 @@ export function SidebarNav({ collapsed, counts }: { collapsed: boolean; counts: 
 
   if (collapsed) {
     return (
-      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-3 scrollbar-thin" aria-label="Main">
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-3 scrollbar-thin" aria-label={t('Main')}>
         {sections.map((s) => {
           const Icon = s.icon;
           const here = current[0] === s.label;
@@ -155,7 +156,7 @@ export function SidebarNav({ collapsed, counts }: { collapsed: boolean; counts: 
                 <DropdownTrigger asChild>
                   <button
                     type="button"
-                    aria-label={s.label}
+                    aria-label={t(s.label)}
                     className={cn(
                       'relative flex size-9 cursor-pointer items-center justify-center rounded-md transition-colors hover:bg-sidebar-active hover:text-white',
                       here && 'bg-sidebar-active text-white',
@@ -190,7 +191,7 @@ export function SidebarNav({ collapsed, counts }: { collapsed: boolean; counts: 
   }
 
   return (
-    <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4 scrollbar-thin" aria-label="Main">
+    <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-4 scrollbar-thin" aria-label={t('Main')}>
       {sections.map((s) => {
         const isOpen = open.has(s.label);
         return (
@@ -204,7 +205,7 @@ export function SidebarNav({ collapsed, counts }: { collapsed: boolean; counts: 
                 current[0] === s.label && !isOpen && 'text-white',
               )}
             >
-              <span className="truncate">{s.label}</span>
+              <span className="truncate">{t(s.label)}</span>
               <ChevronRight className={cn('ml-auto size-3 transition-transform', isOpen && 'rotate-90')} />
             </button>
             {isOpen && (
@@ -229,7 +230,7 @@ function FlyoutItem({ item, counts, active, onSelect }: { item: NavItem; counts:
   return (
     <DropdownItem onSelect={onSelect}>
       <Icon />
-      <span className={cn('flex-1', active && 'font-semibold text-primary')}>{item.label}</span>
+      <span className={cn('flex-1', active && 'font-semibold text-primary')}>{t(item.label)}</span>
       {!!n && <span className={cn('rounded px-1.5 text-[10px] font-semibold tabular-nums', item.badge === 'breached' ? 'bg-danger-soft text-danger' : 'bg-surface-2 text-muted')}>{n}</span>}
     </DropdownItem>
   );

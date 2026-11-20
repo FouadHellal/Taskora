@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, Clock, PauseCircle, XCircle } from 'lucide
 import { Badge, Dot } from './ui/misc';
 import { Tooltip } from './ui/overlays';
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
+import { translate as t } from '@/lib/i18n';
 
 export function StatusBadge({ name, color }: { name?: string | null; color?: string | null }) {
   if (!name) return null;
@@ -46,15 +47,15 @@ export function SlaBadge({ state, due, compact }: { state: SlaState; due?: strin
   const badge = (
     <Badge tone={s.tone}>
       <Icon className="size-3" />
-      {compact ? null : s.label}
+      {compact ? null : t(s.label)}
       {due && (state === 'pending' || state === 'at_risk' || state === 'breached') && <span className="font-normal opacity-80">{fmtRelative(due)}</span>}
     </Badge>
   );
-  return due ? <Tooltip content={`Due ${fmtDateTime(due)}`}>{badge}</Tooltip> : badge;
+  return due ? <Tooltip content={t('Due {date}', { date: fmtDateTime(due) })}>{badge}</Tooltip> : badge;
 }
 
 export function ActiveBadge({ active }: { active: boolean }) {
-  return active ? <Badge tone="success">Active</Badge> : <Badge>Inactive</Badge>;
+  return active ? <Badge tone="success">{t('Active')}</Badge> : <Badge>{t('Inactive')}</Badge>;
 }
 
 const LIFECYCLE_TONE: Record<string, 'success' | 'neutral' | 'warning' | 'info' | 'danger'> = {
