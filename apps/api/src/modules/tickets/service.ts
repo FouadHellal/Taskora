@@ -1,5 +1,5 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { formatNumber, type TicketInput, ticketSchema } from '@taskora/shared';
+import { formatNumber, noteImagesToText, type TicketInput, ticketSchema } from '@taskora/shared';
 import type { z } from 'zod';
 import type { Tx } from '../../db/client.js';
 import * as s from '../../db/schema/index.js';
@@ -378,7 +378,7 @@ export async function addTicketNote(
     'ticket.note_added',
     [ticket.assignedUserId, ...watchers.map((w) => w.userId)],
     await ticketVars(db, ticket, ctx.userId),
-    { type: 'ticket.note_added', title: `New note on ${ticket.ticketNumber}`, body: input.body.slice(0, 200), link: `/tickets/${ticketId}`, entityType: 'ticket', entityId: ticketId },
+    { type: 'ticket.note_added', title: `New note on ${ticket.ticketNumber}`, body: noteImagesToText(input.body).slice(0, 200), link: `/tickets/${ticketId}`, entityType: 'ticket', entityId: ticketId },
     ctx.userId,
   );
   return note!;
