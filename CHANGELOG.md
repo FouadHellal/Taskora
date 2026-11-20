@@ -1,9 +1,28 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0] — 2026-11-20
+
+### Added
+- **Settings hub** (⚙ in the top bar, `/settings`): a searchable index of every setting, *My preferences* (language, ticket window, theme, time zone), *Regional & display* (currency picker, default language, date format, default tax rate, time rounding), *E-mail to ticket* and *API & webhooks*.
+- **Languages**: French, Dutch, German and Spanish besides English — per user or as the organization default; dates follow the language and the chosen date format.
+- **Tickets open in their own window** (like Autotask; per-user and organization setting). Links inside the ticket window open in the main window.
+- **Clearer ticket page**: summary strip (status, priority, SLA, worked vs estimate, counts), prominent *New note* / *New time entry* actions and tabs for Notes, Time entries (with totals and edit/delete), Activity, Attachments, Related tickets, Knowledge and **custom tabs** made from custom fields (*Show in tab*).
+- **Paste or drop images** into notes, the description, the resolution, time entries and e-mails; e-mails get the images as attachments and the portal shows them.
+- **Force delete for super administrators**: a refused delete shows exactly what else would be removed and lets an Administrator delete it anyway (or move picklist references to another value), in one transaction, recorded in the audit log.
+- **API keys** (`Authorization: Bearer tka_…`), **outgoing webhooks** (signed, retried) and `POST /api/v1/inbound/email` for n8n / Power Automate — see [docs/n8n.md](docs/n8n.md).
+- The inbound mailbox (IMAP) can be configured in the UI (password encrypted); `IMAP_*` variables remain a fallback.
+- **Help & Guides** (`/help`): in-app how-to articles.
+- Contracts: block balance per block with low-balance warning, billing preview, contract exclusions (work types that stay billable), per-ticket rate, editable hour blocks, service end dates.
+
+### Fixed
+- Contract billing: block-hour overage is now billed at the overage rate; fixed-price amounts, unpaid hour blocks and per-ticket charges are invoiced; recurring fees and services follow their frequency and the contract dates (prorated partial periods); services on every contract type are billed; time on an invoice can no longer be changed; time can no longer be covered by another company's contract; consistent "hours used"; amounts no longer rounded before multiplying; billing periods use the organization time zone; no empty draft invoices.
 
 ### Changed
 - Taskora is released under the MIT license (`LICENSE`).
+- Deletes refused because a record is in use answer HTTP 409 `in_use` (was 400 for a few guards).
+
+### Upgrade notes
+- `bash scripts/update.sh` (backs up first). Migrations 0009 and 0010 only add tables and columns; existing data is not changed. Contracts, blocks and fixed prices that started before the upgrade are not billed again.
 
 ## [0.3.3] — 2026-11-09
 
