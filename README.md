@@ -25,7 +25,7 @@
 ## Quick start (Docker, Ubuntu Server)
 
 ```bash
-git clone https://github.com/FouadHELLAL7/Taskora.git taskora
+git clone https://github.com/FouadHellal/Taskora.git taskora
 cd taskora
 cp .env.example .env        # set POSTGRES_PASSWORD and TASKORA_ENCRYPTION_KEY (openssl rand -hex 32)
 docker compose up -d --build
@@ -39,7 +39,7 @@ Open `http://<server>:8080`, enter the setup token and create the first administ
 Requirements: Node.js ≥ 22 (`nvm use` reads `.nvmrc`).
 
 ```bash
-git clone https://github.com/FouadHELLAL7/Taskora.git taskora
+git clone https://github.com/FouadHellal/Taskora.git taskora
 cd taskora
 ```
 

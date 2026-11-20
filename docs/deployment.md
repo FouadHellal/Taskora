@@ -20,7 +20,7 @@ sudo usermod -aG docker $USER   # log out and back in
 ## 2. Get the code and configure
 
 ```bash
-git clone https://github.com/FouadHELLAL7/Taskora.git taskora
+git clone https://github.com/FouadHellal/Taskora.git taskora
 cd taskora
 bash scripts/install.sh        # creates .env with generated secrets, builds, starts, prints setup token
 ```
