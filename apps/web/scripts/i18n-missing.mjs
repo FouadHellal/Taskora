@@ -62,6 +62,10 @@ const EXTRA = [
   'Preferences', 'My preferences', 'Personal settings', 'Organization settings', 'Appearance', 'Theme', 'Account', 'Security',
   'Saved', 'Settings saved', 'Saving…', 'Continue', 'Optional', 'None', 'Unknown', 'No', 'OK', 'Apply', 'Copy', 'Copied',
   'Today', 'Yesterday', 'Tomorrow', 'Week', 'Month', 'Year', 'Day', 'Days', 'Hours', 'Minutes',
+  // settings hub and guides (built on another branch)
+  'Settings', 'Help & Guides', 'All settings', 'Regional & display', 'E-mail to ticket', 'API & webhooks', 'API keys', 'Webhooks',
+  'New API key', 'New webhook', 'Currency', 'Default language', 'Default tax rate (%)', 'When I open a ticket', 'Force delete', 'Keep it',
+  'Search settings (e.g. currency, queue, n8n)…', 'Search the guides…',
 ];
 
 function walk(dir, out = []) {

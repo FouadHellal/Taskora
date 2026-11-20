@@ -1214,6 +1214,24 @@ const fr: Dict = {
   "You cannot change your own role": "Vous ne pouvez pas modifier votre propre rôle",
   "You're all caught up.": "Vous êtes à jour.",
   "Your role does not have permission to view this page.": "Votre rôle n'a pas l'autorisation d'afficher cette page.",
+  // settings hub and guides
+  "Help & Guides": "Aide et guides",
+  "All settings": "Tous les paramètres",
+  "Regional & display": "Région et affichage",
+  "E-mail to ticket": "E-mail vers ticket",
+  "API & webhooks": "API et webhooks",
+  "API keys": "Clés API",
+  "Webhooks": "Webhooks",
+  "New API key": "Nouvelle clé API",
+  "New webhook": "Nouveau webhook",
+  "Currency": "Devise",
+  "Default language": "Langue par défaut",
+  "Default tax rate (%)": "Taux de TVA par défaut (%)",
+  "When I open a ticket": "Quand j'ouvre un ticket",
+  "Force delete": "Forcer la suppression",
+  "Keep it": "Le conserver",
+  "Search settings (e.g. currency, queue, n8n)…": "Rechercher un paramètre (ex. devise, file d'attente, n8n)…",
+  "Search the guides…": "Rechercher dans les guides…",
 };
 
 export default fr;

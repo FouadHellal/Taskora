@@ -1214,6 +1214,24 @@ const nl: Dict = {
   "You cannot change your own role": "U kunt uw eigen rol niet wijzigen",
   "You're all caught up.": "U bent helemaal bij.",
   "Your role does not have permission to view this page.": "Uw rol heeft geen rechten om deze pagina te bekijken.",
+  // settings hub and guides
+  "Help & Guides": "Help en handleidingen",
+  "All settings": "Alle instellingen",
+  "Regional & display": "Regio en weergave",
+  "E-mail to ticket": "E-mail naar ticket",
+  "API & webhooks": "API en webhooks",
+  "API keys": "API-sleutels",
+  "Webhooks": "Webhooks",
+  "New API key": "Nieuwe API-sleutel",
+  "New webhook": "Nieuwe webhook",
+  "Currency": "Valuta",
+  "Default language": "Standaardtaal",
+  "Default tax rate (%)": "Standaard btw-tarief (%)",
+  "When I open a ticket": "Wanneer ik een ticket open",
+  "Force delete": "Geforceerd verwijderen",
+  "Keep it": "Behouden",
+  "Search settings (e.g. currency, queue, n8n)…": "Instellingen zoeken (bv. valuta, wachtrij, n8n)…",
+  "Search the guides…": "Handleidingen doorzoeken…",
 };
 
 export default nl;
