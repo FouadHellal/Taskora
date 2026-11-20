@@ -1,10 +1,26 @@
 import type { FieldErrors } from 'react-hook-form';
 import type { CustomFieldEntity } from '@taskora/shared';
-import { useLookups } from '@/lib/lookups';
+import { useLookups, type CustomFieldDef } from '@/lib/lookups';
 import { fmtDate } from '@/lib/utils';
 import { Checkbox, Input, Select, Textarea } from './ui/input';
 import { Field } from './ui/misc';
 import { FormField, FormGrid, FormSection } from './form';
+
+/** Whether a field belongs to 	ab (undefined: any tab; null: fields shown outside tabs). */
+export function inTab(d: CustomFieldDef, tab: string | null | undefined) {
+  if (tab === undefined) return true;
+  return (d.tab?.trim() || null) === tab;
+}
+
+/** Distinct tab names of the active custom fields of an entity, in field order. */
+export function customFieldTabs(defs: CustomFieldDef[] | undefined, entity: CustomFieldEntity): string[] {
+  const tabs: string[] = [];
+  for (const d of defs ?? []) {
+    const t = d.tab?.trim();
+    if (d.entity === entity && d.isActive && t && !tabs.includes(t)) tabs.push(t);
+  }
+  return tabs;
+}
 
 /** Renders inputs for the active custom fields of an entity. */
 export function CustomFieldsEditor({
@@ -12,20 +28,25 @@ export function CustomFieldsEditor({
   value,
   onChange,
   errors,
+  tab,
+  title = 'Custom fields',
 }: {
   entity: CustomFieldEntity;
   value: Record<string, unknown> | undefined;
   onChange: (v: Record<string, unknown>) => void;
   errors?: FieldErrors;
+  /** Only the fields of this tab (null: fields without a tab); all fields when omitted. */
+  tab?: string | null;
+  title?: string;
 }) {
   const lookups = useLookups();
-  const defs = (lookups.data?.customFields ?? []).filter((d) => d.entity === entity && d.isActive);
+  const defs = (lookups.data?.customFields ?? []).filter((d) => d.entity === entity && d.isActive && inTab(d, tab));
   if (!defs.length) return null;
   const v = value ?? {};
   const set = (key: string, val: unknown) => onChange({ ...v, [key]: val });
   const errorOf = (key: string) => (errors?.[`customFields.${key}`] as { message?: string } | undefined)?.message;
   return (
-    <FormSection title="Custom fields">
+    <FormSection title={title}>
       <FormGrid cols={2}>
         {defs.map((d) => {
           const current = v[d.key];
@@ -62,9 +83,9 @@ export function CustomFieldsEditor({
 }
 
 /** Read-only display of custom field values. */
-export function CustomFieldsView({ entity, value }: { entity: CustomFieldEntity; value: Record<string, unknown> | undefined }) {
+export function CustomFieldsView({ entity, value, tab }: { entity: CustomFieldEntity; value: Record<string, unknown> | undefined; tab?: string | null }) {
   const lookups = useLookups();
-  const defs = (lookups.data?.customFields ?? []).filter((d) => d.entity === entity && d.isActive);
+  const defs = (lookups.data?.customFields ?? []).filter((d) => d.entity === entity && d.isActive && inTab(d, tab));
   if (!defs.length) return null;
   return (
     <>

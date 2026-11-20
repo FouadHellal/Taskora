@@ -12,6 +12,7 @@ import { DataTable, type Column } from '@/components/data-table';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Skeleton } from '@/components/ui/misc';
 import { AssignToMeButton, ticketCols, type TicketRow } from '@/components/workspace/tickets';
+import { useOpenTicket } from '@/lib/open-ticket';
 
 interface QueueStats {
   open: number;
@@ -31,6 +32,7 @@ const VIEWS = [
 
 export default function QueuesPage() {
   const navigate = useNavigate();
+  const openTicket = useOpenTicket();
   const { can } = useAuth();
   const lookups = useLookups();
   const t = useTableState({ sort: 'dueAt', order: 'asc', pageSize: 50 });
@@ -198,7 +200,7 @@ export default function QueuesPage() {
           sort={t.sortState}
           onSortChange={t.setSort}
           onPageChange={t.setPage}
-          onRowClick={(r) => navigate(`/tickets/${r.id}`)}
+          onRowClick={(r, e) => openTicket(r.id, e)}
           rowClassName={(r) => (r.sla.overall === 'breached' ? 'shadow-[inset_3px_0_0_var(--danger)]' : undefined)}
           empty={<EmptyState icon={<Inbox />} title="Queue is clear" description="No open tickets match this view." />}
         />

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Workflow, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { Dialog, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/u
 import { FormField, FormGrid, handleFormError } from '@/components/form';
 import { DataTable, type Column } from '@/components/data-table';
 import { EntityPicker } from '@/components/entity-picker';
+import { TicketLink } from '@/lib/open-ticket';
 
 interface Condition {
   field: WorkflowField;
@@ -360,7 +361,7 @@ function Executions({ rules }: { rules: Rule[] }) {
   const cols: Column<Execution>[] = [
     { header: 'Time', cell: ({ row }) => <span className="text-xs">{fmtDateTime(row.original.executedAt)}</span> },
     { header: 'Rule', cell: ({ row }) => row.original.ruleName },
-    { header: 'Ticket', cell: ({ row }) => (row.original.ticketId ? <Link to={`/tickets/${row.original.ticketId}`} className="font-mono text-xs hover:text-primary">{row.original.ticketNumber}</Link> : '—') },
+    { header: 'Ticket', cell: ({ row }) => (row.original.ticketId ? <TicketLink ticketId={row.original.ticketId} className="font-mono text-xs hover:text-primary">{row.original.ticketNumber}</TicketLink> : '—') },
     { header: 'Trigger', cell: ({ row }) => <span className="text-xs text-muted">{row.original.trigger}</span> },
     { header: 'Status', cell: ({ row }) => <Badge tone={row.original.status === 'success' ? 'success' : row.original.status === 'failed' ? 'danger' : 'info'}>{row.original.status}</Badge> },
     { header: 'Result', cell: ({ row }) => <span className="text-xs text-muted">{row.original.error ?? row.original.result?.join(', ')}</span> },

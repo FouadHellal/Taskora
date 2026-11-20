@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Controller, useForm } from 'react-hook-form';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Ticket } from 'lucide-react';
@@ -15,6 +15,7 @@ import { FormField, FormGrid, handleFormError } from '@/components/form';
 import { EntityPicker } from '@/components/entity-picker';
 import { CustomFieldsEditor } from '@/components/custom-fields';
 import { StatusBadge } from '@/components/badges';
+import { openTicketWindow, TicketLink, useTicketWindowPreferred } from '@/lib/open-ticket';
 
 interface FormValues {
   title: string;
@@ -58,6 +59,7 @@ const n = (v: string) => (v ? Number(v) : null);
 export default function NewTicketPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const preferWindow = useTicketWindowPreferred();
   const [params] = useSearchParams();
   const lookups = useLookups();
   const L = lookups.data;
@@ -168,7 +170,9 @@ export default function NewTicketPage() {
       }),
     onSuccess: (t) => {
       toast.success(`Ticket ${t.ticketNumber} created`);
-      navigate(`/tickets/${t.id}`, { replace: true });
+      // In window mode the new ticket opens in its own window and this one goes back to where it came from.
+      if (preferWindow && openTicketWindow(t.id)) navigate((location.state as { from?: string })?.from ?? '/tickets', { replace: true });
+      else navigate(`/tickets/${t.id}`, { replace: true });
     },
     onError: (e) => handleFormError(e, setError),
   });
@@ -362,9 +366,9 @@ export default function NewTicketPage() {
               <ul className="divide-y divide-border">
                 {dups.data!.data.map((d) => (
                   <li key={d.id} className="px-4 py-2">
-                    <Link to={`/tickets/${d.id}`} target="_blank" className="block text-[13px] font-medium hover:text-primary">
+                    <TicketLink ticketId={d.id} className="block text-[13px] font-medium hover:text-primary">
                       <span className="font-mono text-xs text-muted">{d.ticketNumber}</span> {d.title}
-                    </Link>
+                    </TicketLink>
                     <div className="mt-0.5 flex items-center gap-2 text-[11px] text-muted">
                       <StatusBadge name={d.statusName} color={d.statusColor} /> {fmtRelative(d.createdAt)}
                     </div>

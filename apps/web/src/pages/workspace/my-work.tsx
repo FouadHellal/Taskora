@@ -12,6 +12,7 @@ import { Badge, Card, CardHeader, EmptyState, Skeleton, Stat } from '@/component
 import { ticketCols, type TicketRow } from '@/components/workspace/tickets';
 import { useState } from 'react';
 import { ServiceCallDialog } from '@/components/workspace/service-call-dialog';
+import { useOpenTicket } from '@/lib/open-ticket';
 
 interface MyWork {
   summary: { open: number; new: number; waiting: number; dueSoon: number; breached: number };
@@ -31,6 +32,7 @@ export default function MyWorkPage() {
   const me = useMe();
   const { can } = useAuth();
   const navigate = useNavigate();
+  const openTicket = useOpenTicket();
   const [scheduling, setScheduling] = useState(false);
   const canTickets = can('tickets.read');
 
@@ -111,7 +113,7 @@ export default function MyWorkPage() {
                   columns={[ticketCols.ticket, ticketCols.company, ticketCols.priority, ticketCols.status, ticketCols.sla, ticketCols.due]}
                   data={mine.data?.data}
                   loading={mine.isLoading}
-                  onRowClick={(r) => navigate(`/tickets/${r.id}`)}
+                  onRowClick={(r, e) => openTicket(r.id, e)}
                   empty={<EmptyState icon={<Inbox />} title="Inbox zero" description="No open tickets are assigned to you." />}
                 />
                 {mine.data && mine.data.total > mine.data.data.length && (
@@ -141,7 +143,7 @@ export default function MyWorkPage() {
                   columns={[ticketCols.ticket, ticketCols.company, ticketCols.assignee, ticketCols.status, ticketCols.sla]}
                   data={watching.data?.data}
                   loading={watching.isLoading}
-                  onRowClick={(r) => navigate(`/tickets/${r.id}`)}
+                  onRowClick={(r, e) => openTicket(r.id, e)}
                   empty={<EmptyState icon={<Eye />} title="Not watching any open tickets" description="Use “Watch” on a ticket to follow its updates here." />}
                 />
               </Card>

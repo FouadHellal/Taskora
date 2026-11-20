@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Command } from 'cmdk';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
@@ -7,6 +6,7 @@ import { BookOpen, Building2, Contact, FileSignature, FolderKanban, HardDrive, P
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { translate as t } from '@/lib/i18n';
+import { useOpenLink } from '@/lib/open-ticket';
 import { flatNav } from './nav';
 import { Spinner } from '../ui/misc';
 
@@ -39,7 +39,6 @@ const TYPE_LABEL: Record<string, string> = {
 
 /** Ctrl/Cmd+K: global record search plus quick navigation and actions. */
 export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
-  const navigate = useNavigate();
   const { can } = useAuth();
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -58,9 +57,10 @@ export function CommandPalette({ open, onOpenChange }: { open: boolean; onOpenCh
     staleTime: 5_000,
   });
 
+  const openLink = useOpenLink();
   const go = (url: string) => {
     onOpenChange(false);
-    navigate(url);
+    openLink(url);
   };
 
   const groups = (search.data?.data ?? []).reduce<Record<string, Hit[]>>((acc, h) => {

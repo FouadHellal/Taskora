@@ -7,10 +7,11 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { opts, useLookups } from '@/lib/lookups';
 import { Button } from '@/components/ui/button';
-import { Checkbox, Input, Select, Textarea } from '@/components/ui/input';
+import { Checkbox, Input, Select } from '@/components/ui/input';
 import { Dialog } from '@/components/ui/overlays';
 import { FormField, handleFormError } from '@/components/form';
 import type { TicketDetail } from './ticket-types';
+import { ImageTextarea } from './image-paste';
 
 interface Draft {
   enabled: boolean;
@@ -48,6 +49,7 @@ export function SendEmailDialog({ ticket, open, onOpenChange, onSent }: { ticket
   const [attach, setAttach] = useState<number[]>([]);
   const [saveAsNote, setSaveAsNote] = useState(true);
   const [statusId, setStatusId] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     if (!open || !draft.data) return;
@@ -93,7 +95,7 @@ export function SendEmailDialog({ ticket, open, onOpenChange, onSent }: { ticket
         d?.enabled ? (
           <>
             <Button onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button variant="primary" loading={send.isPending} disabled={!split(to).length || !subject.trim() || !body.trim()} onClick={() => send.mutate()}>
+            <Button variant="primary" loading={send.isPending} disabled={!split(to).length || !subject.trim() || !body.trim() || uploading} onClick={() => send.mutate()}>
               <Send /> Send
             </Button>
           </>
@@ -137,7 +139,7 @@ export function SendEmailDialog({ ticket, open, onOpenChange, onSent }: { ticket
             <Input value={subject} onChange={(e) => setSubject(e.target.value)} />
           </FormField>
           <FormField label="Message" required>
-            <Textarea rows={10} value={body} onChange={(e) => setBody(e.target.value)} />
+            <ImageTextarea ticketId={ticket.id} rows={10} value={body} onValueChange={setBody} onBusyChange={setUploading} />
           </FormField>
           {d.signature && (
             <pre className="whitespace-pre-wrap rounded-md bg-surface-2 px-3 py-2 font-sans text-xs text-muted">

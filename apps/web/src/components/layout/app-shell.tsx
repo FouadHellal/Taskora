@@ -17,6 +17,7 @@ import { TimerWidget } from './timer-widget';
 import { NotificationBell } from './notification-bell';
 import { useTheme } from '@/hooks/use-theme';
 import { useNarrow } from '@/hooks/use-media-query';
+import { useOpenerNavigation } from '@/hooks/use-opener-navigation';
 import { ShortcutsDialog, useGlobalShortcuts } from './shortcuts';
 import { ChangePasswordDialog } from './change-password';
 import { SessionsDialog } from './sessions';
@@ -59,6 +60,7 @@ export function AppShell() {
   }, [collapsed]);
 
   useGlobalShortcuts({ openPalette: () => setPaletteOpen(true), openHelp: () => setShortcutsOpen(true) });
+  useOpenerNavigation();
 
   const counts = useQuery({
     queryKey: ['ticket-counts'],

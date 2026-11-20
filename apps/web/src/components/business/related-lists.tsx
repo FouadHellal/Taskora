@@ -10,6 +10,7 @@ import { PriorityBadge, StatusBadge } from '../badges';
 import { Badge, EmptyState } from '../ui/misc';
 import { FilterSelect } from '../page';
 import { TimeStatusBadge, useMoney } from './common';
+import { TicketLink, useOpenTicket } from '@/lib/open-ticket';
 
 export interface TicketRow {
   id: number;
@@ -31,6 +32,7 @@ export interface TicketRow {
 /** Tickets linked to a record (contract, project…), with open/all toggle. */
 export function RelatedTickets({ filter, pageSize = 25 }: { filter: Record<string, number>; pageSize?: number }) {
   const navigate = useNavigate();
+  const openTicket = useOpenTicket();
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<Sort>({ sort: 'createdAt', order: 'desc' });
   const [cat, setCat] = useState('');
@@ -45,10 +47,10 @@ export function RelatedTickets({ filter, pageSize = 25 }: { filter: Record<strin
       meta: { sortKey: 'ticketNumber' },
       cell: ({ row: { original: t } }) => (
         <div className="min-w-0 max-w-md">
-          <Link to={`/tickets/${t.id}`} className="font-medium hover:text-primary" onClick={(e) => e.stopPropagation()}>
+          <TicketLink ticketId={t.id} className="font-medium hover:text-primary" onClick={(e) => e.stopPropagation()}>
             <span className="mr-1.5 text-muted">{t.ticketNumber}</span>
             {t.title}
-          </Link>
+          </TicketLink>
         </div>
       ),
     },
@@ -89,7 +91,7 @@ export function RelatedTickets({ filter, pageSize = 25 }: { filter: Record<strin
             setPage(1);
           }}
           onPageChange={setPage}
-          onRowClick={(r) => navigate(`/tickets/${r.id}`)}
+          onRowClick={(r, e) => openTicket(r.id, e)}
           empty={<EmptyState icon={<Ticket />} title="No tickets" description="No tickets are linked to this record yet." />}
         />
       </div>
@@ -146,9 +148,9 @@ export function RelatedTime({ filter, pageSize = 25 }: { filter: Record<string, 
       header: 'Work item',
       cell: ({ row: { original: e } }) =>
         e.ticketId ? (
-          <Link to={`/tickets/${e.ticketId}`} className="hover:text-primary">
+          <TicketLink ticketId={e.ticketId} className="hover:text-primary">
             <span className="text-muted">{e.ticketNumber}</span> {e.ticketTitle}
-          </Link>
+          </TicketLink>
         ) : e.projectId ? (
           <Link to={`/projects/${e.projectId}`} className="hover:text-primary">
             {e.taskTitle} <span className="text-muted">· {e.projectName}</span>

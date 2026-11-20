@@ -21,6 +21,7 @@ const Notifications = page(() => import('./pages/workspace/notifications'));
 const TicketList = page(() => import('./pages/tickets/list'));
 const TicketNew = page(() => import('./pages/tickets/new'));
 const TicketDetail = page(() => import('./pages/tickets/detail'));
+const TicketWindow = page(() => import('./pages/tickets/window'));
 const Queues = page(() => import('./pages/tickets/queues'));
 const ServiceCalls = page(() => import('./pages/tickets/service-calls'));
 const SlaMonitor = page(() => import('./pages/tickets/sla-monitor'));
@@ -112,6 +113,21 @@ export function App() {
           <Suspense fallback={<PageLoader />}>
             <PortalApp />
           </Suspense>
+        }
+      />
+      {/* A ticket in its own window: authenticated, but without the application shell. */}
+      <Route
+        path="/t/:id"
+        element={
+          <RequireAuth>
+            <Guard perm="tickets.read">
+              <ErrorBoundary>
+                <Suspense fallback={<PageLoader />}>
+                  <TicketWindow />
+                </Suspense>
+              </ErrorBoundary>
+            </Guard>
+          </RequireAuth>
         }
       />
       <Route

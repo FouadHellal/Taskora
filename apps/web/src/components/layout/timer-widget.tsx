@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { TicketLink } from '@/lib/open-ticket';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pause, Timer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -50,9 +51,15 @@ export function TimerWidget() {
     <>
       <div className="flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary-soft pl-2 text-[12px] text-primary">
         <Timer className="size-3.5 animate-pulse" />
-        <Link to={tm.ticketId ? `/tickets/${tm.ticketId}` : '/time'} className="max-w-40 truncate font-medium hover:underline">
-          {tm.ticketNumber ?? tm.taskTitle ?? t('Timer')}
-        </Link>
+        {tm.ticketId ? (
+          <TicketLink ticketId={tm.ticketId} className="max-w-40 truncate font-medium hover:underline">
+            {tm.ticketNumber ?? t('Timer')}
+          </TicketLink>
+        ) : (
+          <Link to="/time" className="max-w-40 truncate font-medium hover:underline">
+            {tm.taskTitle ?? t('Timer')}
+          </Link>
+        )}
         <span className="font-mono tabular-nums">{elapsedLabel(tm.startedAt, now)}</span>
         <Button size="icon-sm" variant="ghost" className="text-primary" onClick={() => setStopping(true)} aria-label={t('Stop timer')}>
           <Pause />

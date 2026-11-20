@@ -11,6 +11,7 @@ import { idOf } from '../../lib/params.js';
 import { mailSettingsInputSchema, mailSettingsView, parseAddresses, resolveSmtp, saveMailSettings, transportFor } from '../../lib/mail.js';
 import { getSystemSettings } from '../../lib/settings.js';
 import { withSignature } from '../../jobs/email.js';
+import { emailTextWithImages } from '../../lib/note-images.js';
 import { addTicketNote, getTicketRow } from '../tickets/service.js';
 import { runTicketRules } from '../automation/engine.js';
 
@@ -117,9 +118,12 @@ export async function emailRoutes(app: FastifyInstance) {
     if (files.length !== input.attachmentIds.length) throw badRequest('One of the attachments does not belong to this ticket');
     if (files.reduce((n, f) => n + f.sizeBytes, 0) > MAX_ATTACH_BYTES) throw badRequest('Attachments exceed 20 MB in total');
     const root = resolve(app.config.UPLOAD_DIR);
-    const attachments = await Promise.all(
+    const attachments: { filename: string; contentType: string; content: Buffer }[] = await Promise.all(
       files.map(async (f) => ({ filename: f.fileName, contentType: f.mimeType, content: await readFile(join(root, f.storageKey)) })),
     );
+    // Images pasted into the message are sent as attachments; the text names them.
+    const mail = await emailTextWithImages(app.db, app.config.UPLOAD_DIR, id, input.body, input.attachmentIds);
+    attachments.push(...mail.attachments);
 
     try {
       await (app.mailTransport ?? transportFor(smtp)).sendMail({
@@ -129,7 +133,7 @@ export async function emailRoutes(app: FastifyInstance) {
         ...(cc.valid.length ? { cc: cc.valid } : {}),
         ...(bcc.valid.length ? { bcc: bcc.valid } : {}),
         subject,
-        text: withSignature(input.body, smtp.signature),
+        text: withSignature(mail.text, smtp.signature),
         attachments,
       });
     } catch (err) {

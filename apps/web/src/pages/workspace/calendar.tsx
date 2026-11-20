@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Dot, Spinner } from '@/components/ui/misc';
 import { Tooltip } from '@/components/ui/overlays';
 import { ServiceCallDialog, type ServiceCall, type ServiceCallDefaults } from '@/components/workspace/service-call-dialog';
+import { useOpenLink } from '@/lib/open-ticket';
 
 interface CalendarFeed {
   serviceCalls: ServiceCall[];
@@ -87,6 +88,8 @@ function layoutDay(calls: ServiceCall[], day: Date): Segment[] {
 
 export default function CalendarPage() {
   const navigate = useNavigate();
+  // Due-ticket chips open tickets the configured way (own window or here).
+  const openLink = useOpenLink();
   const { can, me } = useAuth();
   const lookups = useLookups();
   const [params, setParams] = useSearchParams();
@@ -196,9 +199,9 @@ export default function CalendarPage() {
 
       <div className="min-h-0 flex-1 bg-surface">
         {view === 'week' ? (
-          <WeekView days={days} data={data} canWrite={canWrite} onNew={openNew} onCall={(c) => setDialog({ call: c })} navigate={navigate} />
+          <WeekView days={days} data={data} canWrite={canWrite} onNew={openNew} onCall={(c) => setDialog({ call: c })} navigate={openLink} />
         ) : (
-          <MonthView days={days} anchor={anchor} data={data} onDay={(d) => goTo(d, 'week')} onCall={(c) => setDialog({ call: c })} navigate={navigate} canWrite={canWrite} onNew={openNew} />
+          <MonthView days={days} anchor={anchor} data={data} onDay={(d) => goTo(d, 'week')} onCall={(c) => setDialog({ call: c })} navigate={openLink} canWrite={canWrite} onNew={openNew} />
         )}
       </div>
       <div className="flex flex-wrap items-center gap-4 border-t border-border bg-surface px-5 py-1.5 text-[11px] text-muted">

@@ -1,8 +1,8 @@
-import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api, type Paginated } from '@/lib/api';
 import { fmtDateTime } from '@/lib/utils';
 import { Badge, Card, CardHeader } from '../ui/misc';
+import { TicketLink } from '@/lib/open-ticket';
 
 interface InboundRow {
   id: number;
@@ -60,9 +60,9 @@ export function InboundEmailLog() {
                       {r.status}
                     </Badge>{' '}
                     {r.ticketId && (
-                      <Link to={`/tickets/${r.ticketId}`} className="text-xs text-primary hover:underline">
+                      <TicketLink ticketId={r.ticketId} className="text-xs text-primary hover:underline">
                         ticket
-                      </Link>
+                      </TicketLink>
                     )}
                   </td>
                 </tr>

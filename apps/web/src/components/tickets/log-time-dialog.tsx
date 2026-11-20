@@ -5,23 +5,27 @@ import { api } from '@/lib/api';
 import { opts, useLookups } from '@/lib/lookups';
 import { toLocalInput } from '@/lib/utils';
 import { Button } from '../ui/button';
-import { Checkbox, Input, Select, Textarea } from '../ui/input';
+import { Checkbox, Input, Select } from '../ui/input';
 import { Dialog } from '../ui/overlays';
 import { FormField, FormGrid, handleFormError } from '../form';
+import { ImageTextarea } from './image-paste';
+import type { TicketTimeEntry } from './ticket-types';
 
-/** Quick time entry against a ticket (or project task). */
+/** Quick time entry against a ticket (or project task); with `entry`, edits that entry. */
 export function LogTimeDialog({
   open,
   onOpenChange,
   ticketId,
   projectTaskId,
   defaultDescription = '',
+  entry,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   ticketId?: number;
   projectTaskId?: number;
   defaultDescription?: string;
+  entry?: TicketTimeEntry | null;
 }) {
   const qc = useQueryClient();
   const lookups = useLookups();
@@ -32,33 +36,43 @@ export function LogTimeDialog({
   const [description, setDescription] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!open) return;
+    setErrors({});
+    if (entry) {
+      setStartedAt(toLocalInput(entry.startedAt));
+      setMinutes(String(entry.durationMinutes));
+      setDescription(entry.description);
+      setInternalNotes(entry.internalNotes ?? '');
+      setWorkTypeId(entry.workTypeId ? String(entry.workTypeId) : '');
+      setBillable(entry.billable);
+      return;
+    }
     setStartedAt(toLocalInput(new Date(Date.now() - 30 * 60_000)));
     setMinutes('30');
     setDescription(defaultDescription);
     setInternalNotes('');
-    setErrors({});
     const def = lookups.data?.workTypes.find((w) => w.isActive !== false);
     setWorkTypeId(def ? String(def.id) : '');
     setBillable(def?.isBillable ?? true);
-  }, [open, defaultDescription, lookups.data]);
+  }, [open, defaultDescription, lookups.data, entry]);
 
   const save = useMutation({
-    mutationFn: () =>
-      api.post('/time-entries', {
-        ticketId: ticketId ?? null,
-        projectTaskId: projectTaskId ?? null,
+    mutationFn: () => {
+      const fields = {
         startedAt: new Date(startedAt).toISOString(),
         durationMinutes: Number(minutes),
         workTypeId: workTypeId ? Number(workTypeId) : null,
         billable,
         description,
         internalNotes: internalNotes || null,
-      }),
+      };
+      return entry ? api.patch(`/time-entries/${entry.id}`, fields) : api.post('/time-entries', { ticketId: ticketId ?? null, projectTaskId: projectTaskId ?? null, ...fields });
+    },
     onSuccess: () => {
-      toast.success('Time logged');
+      toast.success(entry ? 'Time entry updated' : 'Time logged');
       qc.invalidateQueries({ queryKey: ['ticket'] });
       qc.invalidateQueries({ queryKey: ['timeline'] });
       qc.invalidateQueries({ queryKey: ['time-entries'] });
@@ -68,16 +82,17 @@ export function LogTimeDialog({
     onError: (e) => handleFormError(e, (name: string, err: { message: string }) => setErrors((x) => ({ ...x, [name]: err.message }))),
   });
 
+  const uploading = Object.values(busy).some(Boolean);
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Log time"
+      title={entry ? 'Edit time entry' : 'Log time'}
       footer={
         <>
           <Button onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="primary" loading={save.isPending} disabled={!description.trim() || !Number(minutes)} onClick={() => save.mutate()}>
-            Save time entry
+          <Button variant="primary" loading={save.isPending} disabled={!description.trim() || !Number(minutes) || uploading} onClick={() => save.mutate()}>
+            {entry ? 'Save changes' : 'Save time entry'}
           </Button>
         </>
       }
@@ -106,7 +121,7 @@ export function LogTimeDialog({
                 if (w) setBillable(w.isBillable);
               }}
               placeholder="—"
-              options={opts(lookups.data?.workTypes)}
+              options={opts(lookups.data?.workTypes, entry?.workTypeId)}
             />
           </FormField>
           <div className="flex items-end pb-2">
@@ -114,10 +129,10 @@ export function LogTimeDialog({
           </div>
         </FormGrid>
         <FormField label="Work performed" required error={errors.description} hint="Shown on invoices for billable time">
-          <Textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} />
+          <ImageTextarea ticketId={ticketId} rows={4} value={description} onValueChange={setDescription} onBusyChange={(b) => setBusy((x) => ({ ...x, description: b }))} />
         </FormField>
         <FormField label="Internal notes">
-          <Textarea rows={2} value={internalNotes} onChange={(e) => setInternalNotes(e.target.value)} />
+          <ImageTextarea ticketId={ticketId} rows={2} value={internalNotes} onValueChange={setInternalNotes} onBusyChange={(b) => setBusy((x) => ({ ...x, internalNotes: b }))} hint={false} />
         </FormField>
       </div>
     </Dialog>

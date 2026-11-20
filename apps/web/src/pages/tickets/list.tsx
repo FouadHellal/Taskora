@@ -19,6 +19,7 @@ import { PriorityBadge, SlaBadge, StatusBadge, type SlaState } from '@/component
 import { EntityPicker } from '@/components/entity-picker';
 import { handleFormError } from '@/components/form';
 import { ImportPanel } from '@/pages/admin/import';
+import { TicketLink, useOpenTicket } from '@/lib/open-ticket';
 
 const EXPORT_KEY = 'taskora.ticketExportColumns';
 const defaultExport = TICKET_EXPORT_COLUMNS.filter((c) => c.default).map((c) => c.key as string);
@@ -78,9 +79,9 @@ export const ticketColumns: Column<TicketRow>[] = [
     meta: { sortKey: 'title', className: 'min-w-72', mobile: 'primary' },
     cell: ({ row }) => (
       <div className="min-w-0">
-        <Link to={`/tickets/${row.original.id}`} onClick={(e) => e.stopPropagation()} className="line-clamp-1 font-medium hover:text-primary">
+        <TicketLink ticketId={row.original.id} onClick={(e) => e.stopPropagation()} className="line-clamp-1 font-medium hover:text-primary">
           {row.original.title}
-        </Link>
+        </TicketLink>
         <div className="truncate text-[11px] text-muted">
           {[row.original.issueTypeName, row.original.contactName, row.original.ciName].filter(Boolean).join(' · ') || row.original.ticketTypeName}
         </div>
@@ -141,6 +142,7 @@ const PRESETS = {
 export default function TicketListPage({ preset = 'all' }: { preset?: keyof typeof PRESETS }) {
   const p = PRESETS[preset];
   const navigate = useNavigate();
+  const openTicket = useOpenTicket();
   const qc = useQueryClient();
   const { can, refresh } = useAuth();
   const me = useMe();
@@ -390,7 +392,7 @@ export default function TicketListPage({ preset = 'all' }: { preset?: keyof type
         sort={t.sortState}
         onSortChange={t.setSort}
         onPageChange={t.setPage}
-        onRowClick={(r, e) => (e.ctrlKey || e.metaKey ? window.open(`/tickets/${r.id}`, '_blank') : navigate(`/tickets/${r.id}`))}
+        onRowClick={(r, e) => openTicket(r.id, e)}
         selectable={can('tickets.bulk')}
         selection={selection}
         onSelectionChange={setSelection}

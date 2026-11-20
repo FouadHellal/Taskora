@@ -5,6 +5,8 @@ import type { Db } from '../db/client.js';
 import { contacts, notifications, ticketEvents, ticketNotes, tickets, users } from '../db/schema/index.js';
 import { getSystemSettings } from '../lib/settings.js';
 import { resolveSmtp, transportFor } from '../lib/mail.js';
+import { emailTextWithImages } from '../lib/note-images.js';
+import { noteImagesToText } from '@taskora/shared';
 
 export function withSignature(body: string, signature: string) {
   return signature.trim() ? `${body.replace(/\s+$/, '')}\n\n-- \n${signature.trim()}` : body;
@@ -54,13 +56,14 @@ export async function dispatchNotificationEmails(db: Db, config: Config, transpo
       continue;
     }
     const url = r.link && base ? `${base}${r.link}` : null;
+    const body = r.body ? noteImagesToText(r.body) : null;
     try {
       await t.sendMail({
         from: smtp.from,
         to: r.email,
         subject: `[${settings.organizationName}] ${r.title}`,
-        text: [`Hello ${r.firstName},`, '', r.title, r.body ?? '', url ? `\nOpen: ${url}` : ''].join('\n'),
-        html: `<p>Hello ${escapeHtml(r.firstName)},</p><p><strong>${escapeHtml(r.title)}</strong></p>${r.body ? `<p>${escapeHtml(r.body)}</p>` : ''}${
+        text: [`Hello ${r.firstName},`, '', r.title, body ?? '', url ? `\nOpen: ${url}` : ''].join('\n'),
+        html: `<p>Hello ${escapeHtml(r.firstName)},</p><p><strong>${escapeHtml(r.title)}</strong></p>${body ? `<p>${escapeHtml(body)}</p>` : ''}${
           url ? `<p><a href="${escapeHtml(url)}">Open in ${escapeHtml(settings.organizationName)}</a></p>` : ''
         }<p style="color:#888;font-size:12px">You receive this because of your Taskora notification settings.</p>`,
       });
@@ -102,12 +105,15 @@ export async function sendCustomerNote(db: Db, config: Config, noteId: number, t
   if (!row || row.visibility !== 'public' || !row.email) return { sent: false };
   const settings = await getSystemSettings(db);
   const t = transport ?? transportFor(smtp);
+  // Pasted images go out as attachments; the text names them instead of showing raw markdown.
+  const mail = await emailTextWithImages(db, config.UPLOAD_DIR, row.ticketId, row.body);
   await t.sendMail({
     from: smtp.from,
     ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
     to: row.email,
     subject: `[${row.ticketNumber}] ${row.title}`,
-    text: `Hello ${row.firstName ?? ''},\n\n${row.body}\n\n${row.author ?? settings.organizationName}\n${settings.organizationName}\n\nPlease keep [${row.ticketNumber}] in the subject when replying.`,
+    ...(mail.attachments.length ? { attachments: mail.attachments } : {}),
+    text: `Hello ${row.firstName ?? ''},\n\n${mail.text}\n\n${row.author ?? settings.organizationName}\n${settings.organizationName}\n\nPlease keep [${row.ticketNumber}] in the subject when replying.`,
   });
   await db.insert(ticketEvents).values({ ticketId: row.ticketId, userId: null, type: 'email_sent', data: { to: row.email, noteId } });
   return { sent: true };

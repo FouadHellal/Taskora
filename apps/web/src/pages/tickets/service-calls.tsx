@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { TicketLink } from '@/lib/open-ticket';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { addDays, differenceInMinutes, format } from 'date-fns';
@@ -241,9 +242,9 @@ function DayGroup({
             {c.tickets.length ? (
               <div className="flex flex-col gap-0.5">
                 {c.tickets.map((t) => (
-                  <Link key={t.id} to={`/tickets/${t.id}`} onClick={(e) => e.stopPropagation()} className="max-w-[16rem] truncate text-xs hover:text-primary" title={t.title}>
+                  <TicketLink key={t.id} ticketId={t.id} onClick={(e) => e.stopPropagation()} className="max-w-[16rem] truncate text-xs hover:text-primary" title={t.title}>
                     <span className="font-mono text-muted">{t.ticketNumber}</span> {t.title}
-                  </Link>
+                  </TicketLink>
                 ))}
               </div>
             ) : (

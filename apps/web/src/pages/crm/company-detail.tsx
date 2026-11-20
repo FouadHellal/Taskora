@@ -20,6 +20,7 @@ import { RelatedCis, RelatedContracts, RelatedProjects, RelatedTickets } from '@
 import { Attachments } from '@/pages/tickets/detail';
 import { handleFormError } from '@/components/form';
 import { CompanyLogo, LogoEditor } from '@/components/logo';
+import { TicketLink } from '@/lib/open-ticket';
 
 interface Company extends CompanyRecord {
   accountManagerName: string | null;
@@ -453,9 +454,9 @@ function ActivityFeed({ companyId, canWrite }: { companyId: number; canWrite: bo
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   {f.kind === 'ticket' ? (
-                    <Link to={`/tickets/${f.ticket_id}`} className="font-medium hover:text-primary">
+                    <TicketLink ticketId={f.ticket_id!} className="font-medium hover:text-primary">
                       <span className="font-mono text-xs text-muted">{f.ticket_number}</span> {f.title}
-                    </Link>
+                    </TicketLink>
                   ) : (
                     <span className="font-medium">{f.title}</span>
                   )}

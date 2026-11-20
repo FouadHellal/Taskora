@@ -17,7 +17,12 @@ import { likeTerm } from '../../lib/query.js';
 import { addTicketNote, createTicket, updateTicket } from '../tickets/service.js';
 import { runTicketRules } from '../automation/engine.js';
 import { resolveSmtp, transportFor } from '../../lib/mail.js';
+import { INLINE_IMAGE_TYPES, portalImageUrls } from '../../lib/note-images.js';
 import type { Db } from '../../db/client.js';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import { noteImageIds } from '@taskora/shared';
 
 export const PORTAL_COOKIE = 'taskora_portal';
 const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -245,7 +250,49 @@ export async function portalRoutes(app: FastifyInstance) {
           .leftJoin(s.users, eq(s.users.id, s.ticketNotes.userId))
           .where(and(eq(s.ticketNotes.ticketId, t.id), eq(s.ticketNotes.visibility, 'public')))
           .orderBy(asc(s.ticketNotes.createdAt));
-        return { ...t, statusId: undefined, notes: notes.map((n) => ({ ...n, fromCustomer: n.kind === 'portal' || n.kind === 'email', author: n.author ?? null })) };
+        // Pasted images are served through the portal (see below) instead of the staff attachment URL.
+        return {
+          ...t,
+          statusId: undefined,
+          description: portalImageUrls(t.description, t.id),
+          resolution: portalImageUrls(t.resolution, t.id),
+          notes: notes.map((n) => ({ ...n, body: portalImageUrls(n.body, t.id)!, fromCustomer: n.kind === 'portal' || n.kind === 'email', author: n.author ?? null })),
+        };
+      });
+
+      /**
+       * An image pasted into the description, resolution or a customer-visible
+       * note of the contact's ticket. Other attachments (and images only used in
+       * internal notes or time entries) are never served to the portal.
+       */
+      portal.get('/tickets/:id/images/:fileId', async (req, reply) => {
+        const c = contactOf(req);
+        const t = await loadTicket(c, idOf(req));
+        const fileId = idOf(req, 'fileId');
+        const [file] = await app.db
+          .select()
+          .from(s.attachments)
+          .where(and(eq(s.attachments.id, fileId), eq(s.attachments.entityType, 'ticket'), eq(s.attachments.entityId, t.id)));
+        if (!file || !INLINE_IMAGE_TYPES.has(file.mimeType)) throw notFound('Image');
+        const publicNotes = await app.db
+          .select({ body: s.ticketNotes.body })
+          .from(s.ticketNotes)
+          .where(and(eq(s.ticketNotes.ticketId, t.id), eq(s.ticketNotes.visibility, 'public')));
+        const referenced = [t.description, t.resolution, ...publicNotes.map((n) => n.body)].some((text) => noteImageIds(text).includes(fileId));
+        if (!referenced) throw notFound('Image');
+        const root = resolve(app.config.UPLOAD_DIR);
+        const path = join(root, file.storageKey);
+        if (!path.startsWith(root)) throw notFound('Image');
+        await stat(path).catch(() => {
+          throw notFound('Image');
+        });
+        return reply
+          .header('content-type', file.mimeType)
+          .header('content-disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.fileName)}`)
+          .header('cache-control', 'private, max-age=3600')
+          .header('x-content-type-options', 'nosniff')
+          .header('content-security-policy', "default-src 'none'; sandbox")
+          .send(createReadStream(path));
       });
 
       portal.post('/tickets', async (req, reply) => {

@@ -21,6 +21,7 @@ import { ConfirmDialog, Tooltip } from '@/components/ui/overlays';
 import { TimeStatusBadge, enumOpts, useMoney } from '@/components/business/common';
 import type { TimeEntryRow, TimeList } from '@/components/business/related-lists';
 import { TimeEntryDialog } from '@/components/business/time-entry-form';
+import { TicketLink } from '@/lib/open-ticket';
 
 const ymd = (d: Date) => format(d, 'yyyy-MM-dd');
 const mondayOf = (d: Date) => startOfWeek(d, { weekStartsOn: 1 });
@@ -113,9 +114,9 @@ export default function TimePage() {
       cell: ({ row: { original: e } }) => (
         <div className="min-w-0">
           {e.ticketId ? (
-            <Link to={`/tickets/${e.ticketId}`} className="block truncate hover:text-primary" onClick={(ev) => ev.stopPropagation()}>
+            <TicketLink ticketId={e.ticketId} className="block truncate hover:text-primary" onClick={(ev) => ev.stopPropagation()}>
               <span className="text-muted">{e.ticketNumber}</span> {e.ticketTitle}
-            </Link>
+            </TicketLink>
           ) : (
             <Link to={`/projects/${e.projectId}`} className="block truncate hover:text-primary" onClick={(ev) => ev.stopPropagation()}>
               {e.taskTitle} <span className="text-muted">· {e.projectName}</span>
