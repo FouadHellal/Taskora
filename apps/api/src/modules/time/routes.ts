@@ -10,7 +10,9 @@ import { boolParam, countAll, idList, intParam, paginated, parseList, searchAny,
 import { can, currentUser } from '../../lib/context.js';
 import { getSystemSettings } from '../../lib/settings.js';
 import { toCsv } from '../tickets/routes.js';
-import { classifyTime, resolveTimeContext, roundMinutes } from './service.js';
+import { assertContractCompany, classifyTime, invoiceLock, resolveTimeContext, roundMinutes } from './service.js';
+import { recomputeCoverage } from '../contracts/coverage.js';
+
 
 const LOCKED = new Set(['approved', 'billed']);
 
@@ -122,12 +124,13 @@ export async function timeRoutes(app: FastifyInstance) {
     const row = await app.db.transaction(async (tx) => {
       const ctx = await resolveTimeContext(tx, input.ticketId, input.projectTaskId);
       const contractId = input.contractId ?? ctx.contractId;
-      const cls = await classifyTime(tx, contractId, input.workTypeId, (req.body as { billable?: boolean }).billable);
+      if (input.contractId) await assertContractCompany(tx, input.contractId, ctx.companyId);
       const settings = await getSystemSettings(tx);
       const duration = roundMinutes(input.durationMinutes, settings.timeRoundingMinutes);
       const startedAt = new Date(input.startedAt);
       if (Number.isNaN(startedAt.getTime())) throw badRequest('Invalid start time', { fields: { startedAt: 'Invalid date/time' } });
       if (startedAt.getTime() > Date.now() + 24 * 3600_000) throw badRequest('Time cannot be logged more than a day in the future', { fields: { startedAt: 'Too far in the future' } });
+      const cls = await classifyTime(tx, contractId, input.workTypeId, (req.body as { billable?: boolean }).billable, { startedAt, durationMinutes: duration });
       const [r] = await tx
         .insert(s.timeEntries)
         .values({
@@ -152,7 +155,9 @@ export async function timeRoutes(app: FastifyInstance) {
         await tx.update(s.tickets).set({ lastActivityAt: new Date() }).where(eq(s.tickets.id, input.ticketId));
       }
       await audit(tx, req, { action: 'create', entityType: 'time_entry', entityId: r!.id, summary: `${duration} min` });
-      return r!;
+      await recomputeCoverage(tx, [contractId]);
+      const [fresh] = await tx.select().from(s.timeEntries).where(eq(s.timeEntries.id, r!.id));
+      return fresh!;
     });
     return reply.status(201).send(row);
   });
@@ -160,32 +165,51 @@ export async function timeRoutes(app: FastifyInstance) {
   app.patch('/time-entries/:id', { config: { perm: 'time.write' } }, async (req) => {
     const id = idOf(req);
     const me = currentUser(req);
-    const [before] = await app.db.select().from(s.timeEntries).where(eq(s.timeEntries.id, id));
-    if (!before) throw notFound('Time entry');
-    if (before.userId !== me.id && !can(req, 'time.write_all')) throw forbidden();
-    if (before.status === 'billed') throw badRequest('Billed time entries cannot be changed');
-    if (LOCKED.has(before.status) && !can(req, 'time.approve') && before.userId === me.id && (await getSystemSettings(app.db)).requireTimeApproval) {
-      throw badRequest('Approved time entries can only be changed by an approver');
-    }
-    const body = req.body as Record<string, unknown>;
-    const input = timeEntryBaseSchema.partial().parse(body);
-    const data: Partial<typeof before> = {};
-    if ('description' in body) data.description = input.description!;
-    if ('internalNotes' in body) data.internalNotes = input.internalNotes ?? null;
-    if ('durationMinutes' in body) data.durationMinutes = roundMinutes(input.durationMinutes!, (await getSystemSettings(app.db)).timeRoundingMinutes);
-    if ('startedAt' in body) data.startedAt = new Date(input.startedAt!);
-    if ('workTypeId' in body) data.workTypeId = input.workTypeId ?? null;
-    if ('workTypeId' in body || 'billable' in body || 'contractId' in body) {
-      if ('contractId' in body) data.contractId = input.contractId ?? null;
-      Object.assign(data, await classifyTime(app.db, data.contractId ?? before.contractId, data.workTypeId ?? before.workTypeId, 'billable' in body ? input.billable : before.billable));
-    }
-    if (data.startedAt || data.durationMinutes) {
-      const start = data.startedAt ?? before.startedAt;
-      data.endedAt = new Date(start.getTime() + (data.durationMinutes ?? before.durationMinutes) * 60_000);
-    }
-    const [row] = await app.db.update(s.timeEntries).set(data).where(eq(s.timeEntries.id, id)).returning();
-    await audit(app.db, req, { action: 'update', entityType: 'time_entry', entityId: id, changes: diff(before, data) });
-    return row;
+    return app.db.transaction(async (tx) => {
+      const [before] = await tx.select().from(s.timeEntries).where(eq(s.timeEntries.id, id));
+      if (!before) throw notFound('Time entry');
+      if (before.userId !== me.id && !can(req, 'time.write_all')) throw forbidden();
+      if (before.status === 'billed') throw badRequest('Billed time entries cannot be changed');
+      if (before.invoiceId) throw await invoiceLock(tx, before.invoiceId, 'time entry');
+      const settings = await getSystemSettings(tx);
+      if (LOCKED.has(before.status) && !can(req, 'time.approve') && before.userId === me.id && settings.requireTimeApproval) {
+        throw badRequest('Approved time entries can only be changed by an approver');
+      }
+      const body = req.body as Record<string, unknown>;
+      const input = timeEntryBaseSchema.partial().parse(body);
+      const data: Partial<typeof before> = {};
+      if ('description' in body) data.description = input.description!;
+      if ('internalNotes' in body) data.internalNotes = input.internalNotes ?? null;
+      if ('durationMinutes' in body) data.durationMinutes = roundMinutes(input.durationMinutes!, settings.timeRoundingMinutes);
+      if ('startedAt' in body) {
+        data.startedAt = new Date(input.startedAt!);
+        if (Number.isNaN(data.startedAt.getTime())) throw badRequest('Invalid start time', { fields: { startedAt: 'Invalid date/time' } });
+      }
+      if ('workTypeId' in body) data.workTypeId = input.workTypeId ?? null;
+      if ('contractId' in body) {
+        data.contractId = input.contractId ?? null;
+        await assertContractCompany(tx, data.contractId, before.companyId);
+      }
+      if (['workTypeId', 'billable', 'contractId', 'startedAt', 'durationMinutes'].some((k) => k in body)) {
+        const cls = await classifyTime(
+          tx,
+          'contractId' in data ? data.contractId! : before.contractId,
+          'workTypeId' in data ? data.workTypeId! : before.workTypeId,
+          'billable' in body ? input.billable : before.billable,
+          { startedAt: data.startedAt ?? before.startedAt, durationMinutes: data.durationMinutes ?? before.durationMinutes },
+        );
+        Object.assign(data, cls);
+      }
+      if (data.startedAt || data.durationMinutes) {
+        const start = data.startedAt ?? before.startedAt;
+        data.endedAt = new Date(start.getTime() + (data.durationMinutes ?? before.durationMinutes) * 60_000);
+      }
+      await tx.update(s.timeEntries).set(data).where(eq(s.timeEntries.id, id));
+      await recomputeCoverage(tx, [before.contractId, data.contractId]);
+      const [row] = await tx.select().from(s.timeEntries).where(eq(s.timeEntries.id, id));
+      await audit(tx, req, { action: 'update', entityType: 'time_entry', entityId: id, changes: diff(before, data) });
+      return row;
+    });
   });
 
   app.delete('/time-entries/:id', { config: { perm: 'time.write' } }, async (req) => {
@@ -195,21 +219,34 @@ export async function timeRoutes(app: FastifyInstance) {
     if (!before) throw notFound('Time entry');
     if (before.userId !== me.id && !can(req, 'time.write_all')) throw forbidden();
     if (before.status === 'billed') throw badRequest('Billed time entries cannot be deleted');
-    await app.db.delete(s.timeEntries).where(eq(s.timeEntries.id, id));
-    await audit(app.db, req, { action: 'delete', entityType: 'time_entry', entityId: id, summary: `${before.durationMinutes} min: ${before.description.slice(0, 80)}` });
+    if (before.invoiceId) throw await invoiceLock(app.db, before.invoiceId, 'time entry');
+    await app.db.transaction(async (tx) => {
+      await tx.delete(s.timeEntries).where(eq(s.timeEntries.id, id));
+      await recomputeCoverage(tx, [before.contractId]);
+      await audit(tx, req, { action: 'delete', entityType: 'time_entry', entityId: id, summary: `${before.durationMinutes} min: ${before.description.slice(0, 80)}` });
+    });
     return { ok: true };
   });
 
   app.post('/time-entries/approve', { config: { perm: 'time.approve' } }, async (req) => {
     const input = timeApprovalSchema.parse(req.body);
     const me = currentUser(req);
-    const rows = await app.db
-      .update(s.timeEntries)
-      .set({ status: input.status, approvedById: me.id, approvedAt: new Date() })
-      .where(and(inArray(s.timeEntries.id, input.ids), inArray(s.timeEntries.status, ['submitted', 'draft', 'rejected', 'approved'])))
-      .returning({ id: s.timeEntries.id });
-    await audit(app.db, req, { action: 'update', entityType: 'time_entry', summary: `${input.status} ${rows.length} entries`, changes: { ids: input.ids } });
-    return { updated: rows.length };
+    return app.db.transaction(async (tx) => {
+      const [onInvoice] = await tx
+        .select({ invoiceId: s.timeEntries.invoiceId })
+        .from(s.timeEntries)
+        .where(and(inArray(s.timeEntries.id, input.ids), sql`${s.timeEntries.invoiceId} is not null`, sql`${s.timeEntries.status} <> ${input.status}`))
+        .limit(1);
+      if (onInvoice?.invoiceId) throw await invoiceLock(tx, onInvoice.invoiceId, 'time entry');
+      const rows = await tx
+        .update(s.timeEntries)
+        .set({ status: input.status, approvedById: me.id, approvedAt: new Date() })
+        .where(and(inArray(s.timeEntries.id, input.ids), inArray(s.timeEntries.status, ['submitted', 'draft', 'rejected', 'approved'])))
+        .returning({ id: s.timeEntries.id, contractId: s.timeEntries.contractId });
+      await recomputeCoverage(tx, rows.map((r) => r.contractId));
+      await audit(tx, req, { action: 'update', entityType: 'time_entry', summary: `${input.status} ${rows.length} entries`, changes: { ids: input.ids } });
+      return { updated: rows.length };
+    });
   });
 
   /** Daily totals for a week, for the timesheet view. */

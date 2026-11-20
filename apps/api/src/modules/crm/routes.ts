@@ -137,7 +137,7 @@ export async function crmRoutes(app: FastifyInstance) {
       group by u.id, u.first_name, u.last_name order by open desc limit 8`).then((r) => r.rows);
     const [time] = await db.execute<{ minutes30: number; billable30: number }>(sql`
       select coalesce(sum(duration_minutes),0)::int as minutes30,
-             coalesce(sum(duration_minutes) filter (where billable and not contract_covered),0)::int as billable30
+             coalesce(sum(duration_minutes - coalesce(covered_minutes, case when contract_covered then duration_minutes else 0 end)) filter (where billable),0)::int as billable30
       from time_entries where company_id = ${id} and started_at > now() - interval '30 days'`).then((r) => r.rows);
     const [counts] = await db.execute<{ contacts: number; locations: number; projects: number }>(sql`
       select (select count(*) from contacts where company_id = ${id} and is_active)::int as contacts,

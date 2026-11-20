@@ -434,6 +434,7 @@ export const contractSchema = z.object({
   recurringAmount: optNumber,
   billingPeriod: z.enum(BILLING_PERIOD.values).default('monthly'),
   overageRate: optNumber,
+  perTicketRate: optNumber,
   description: optText(10000),
   customFields: customFieldsSchema,
 });
@@ -451,7 +452,11 @@ export const contractServiceSchema = z.object({
   quantity: z.coerce.number().positive().default(1),
   unitPrice: optNumber,
   startDate: optDate,
+  /** Last billed day (inclusive); null = until the contract ends. */
+  endDate: optDate,
 });
+/** Work types that stay billable even when the contract would cover the time. */
+export const contractExclusionsSchema = z.object({ workTypeIds: z.array(reqId).max(200) });
 
 export const serviceSchema = z.object({
   name: reqText(200),
@@ -481,7 +486,8 @@ export const invoiceDraftSchema = z.object({
   includeTime: z.boolean().default(true),
   includeExpenses: z.boolean().default(true),
   includeRecurring: z.boolean().default(true),
-  taxRate: z.coerce.number().min(0).max(100).default(0),
+  /** Omitted/empty = the system default tax rate. */
+  taxRate: z.union([z.literal(''), z.null(), z.coerce.number().min(0).max(100)]).optional().transform((v) => (v === '' || v === null || v === undefined ? undefined : v)),
   notes: optText(5000),
 });
 

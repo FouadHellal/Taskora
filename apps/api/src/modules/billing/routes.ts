@@ -1,17 +1,18 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, isNotNull, sql } from 'drizzle-orm';
 import PDFDocument from 'pdfkit';
 import { expenseSchema, formatMoney, formatNumber, invoiceDraftSchema, invoiceLineSchema, invoiceUpdateSchema } from '@taskora/shared';
 import * as s from '../../db/schema/index.js';
 import { audit } from '../../lib/audit.js';
-import { badRequest, forbidden, notFound } from '../../lib/errors.js';
+import { AppError, badRequest, forbidden, notFound } from '../../lib/errors.js';
 import { idOf } from '../../lib/params.js';
 import { countAll, intParam, nextSequence, paginated, parseList, searchAny, whereAll } from '../../lib/query.js';
 import { can, currentUser } from '../../lib/context.js';
 import { getSystemSettings } from '../../lib/settings.js';
 import type { Tx } from '../../db/client.js';
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
+import { buildDraftLines, gatherBillingInputs, round2, summarise, type DraftOptions } from './engine.js';
+import { coveredMinutesSql, recomputeCoverage } from '../contracts/coverage.js';
+import { assertContractCompany, invoiceLock } from '../time/service.js';
 
 async function recalcInvoice(tx: Tx, invoiceId: number) {
   const [inv] = await tx.select().from(s.invoices).where(eq(s.invoices.id, invoiceId));
@@ -27,11 +28,25 @@ async function recalcInvoice(tx: Tx, invoiceId: number) {
     .where(eq(s.invoices.id, invoiceId));
 }
 
-/** Releases time entries and expenses reserved by an invoice (on delete or void). */
+/** Releases time entries and expenses reserved by an invoice (on delete or void); blocks billed on it are unpaid again. */
 async function releaseInvoice(tx: Tx, invoiceId: number) {
   await tx.update(s.timeEntries).set({ invoiceId: null, status: 'approved' }).where(eq(s.timeEntries.invoiceId, invoiceId));
   await tx.update(s.expenses).set({ invoiceId: null }).where(eq(s.expenses.invoiceId, invoiceId));
+  await setBlocksPaid(tx, invoiceId, false);
 }
+
+/** Hour blocks bought on an invoice follow its payment. */
+async function setBlocksPaid(tx: Tx, invoiceId: number, paid: boolean) {
+  const lines = await tx
+    .select({ blockId: s.invoiceLines.contractBlockId })
+    .from(s.invoiceLines)
+    .where(and(eq(s.invoiceLines.invoiceId, invoiceId), isNotNull(s.invoiceLines.contractBlockId)));
+  const ids = lines.map((l) => l.blockId!).filter(Boolean);
+  if (ids.length) await tx.update(s.contractBlocks).set({ isPaid: paid }).where(inArray(s.contractBlocks.id, ids));
+}
+
+const nothingToBill = (company: string, o: DraftOptions) =>
+  new AppError(422, 'nothing_to_bill', `Nothing to bill for ${company} between ${o.periodStart} and ${o.periodEnd}: no unbilled time, expenses or contract charges. No invoice was created.`);
 
 export async function billingRoutes(app: FastifyInstance) {
   /* ------------------------------------------------------------- expenses */
@@ -78,6 +93,7 @@ export async function billingRoutes(app: FastifyInstance) {
 
   app.post('/expenses', { config: { perm: ['billing.write', 'time.write'] } }, async (req, reply) => {
     const input = expenseSchema.parse(req.body);
+    await assertContractCompany(app.db, input.contractId, input.companyId);
     if (input.ticketId) {
       const [t] = await app.db.select({ companyId: s.tickets.companyId, contractId: s.tickets.contractId }).from(s.tickets).where(eq(s.tickets.id, input.ticketId));
       if (!t || t.companyId !== input.companyId) throw badRequest('The ticket belongs to another company');
@@ -92,7 +108,7 @@ export async function billingRoutes(app: FastifyInstance) {
     const id = idOf(req);
     const [row] = await app.db.select().from(s.expenses).where(eq(s.expenses.id, id));
     if (!row) throw notFound('Expense');
-    if (row.invoiceId) throw badRequest('This expense is on an invoice');
+    if (row.invoiceId) throw await invoiceLock(app.db, row.invoiceId, 'expense');
     if (row.userId !== currentUser(req).id && !can(req, 'billing.write')) throw forbidden();
     await app.db.delete(s.expenses).where(eq(s.expenses.id, id));
     await audit(app.db, req, { action: 'delete', entityType: 'expense', entityId: id });
@@ -106,15 +122,17 @@ export async function billingRoutes(app: FastifyInstance) {
     const q = req.query as { from?: string; to?: string };
     const from = q.from ?? '1970-01-01';
     const to = q.to ?? '2999-12-31';
+    const tz = (await getSystemSettings(app.db)).timezone;
+    const covered = coveredMinutesSql();
     const rows = await app.db.execute(sql`
       with t as (
         select company_id,
-          sum(duration_minutes) filter (where billable and not contract_covered and status = 'approved')::int as billable_minutes,
-          sum(duration_minutes) filter (where billable and not contract_covered and status in ('draft','submitted'))::int as pending_minutes,
-          sum(duration_minutes) filter (where contract_covered)::int as covered_minutes,
-          coalesce(sum(duration_minutes * coalesce(hourly_rate,0) / 60.0) filter (where billable and not contract_covered and status = 'approved'),0)::float as billable_amount
+          sum(duration_minutes - ${covered}) filter (where billable and status = 'approved')::int as billable_minutes,
+          sum(duration_minutes - ${covered}) filter (where billable and status in ('draft','submitted'))::int as pending_minutes,
+          sum(${covered}) filter (where status in ('submitted','approved','billed'))::int as covered_minutes,
+          coalesce(sum((duration_minutes - ${covered}) * coalesce(hourly_rate,0) / 60.0) filter (where billable and status = 'approved'),0)::float as billable_amount
         from time_entries
-        where invoice_id is null and started_at::date between ${from}::date and ${to}::date
+        where invoice_id is null and (started_at at time zone ${tz})::date between ${from}::date and ${to}::date
         group by company_id
       ), e as (
         select company_id, count(*)::int as expense_count, coalesce(sum(amount),0)::float as expense_amount
@@ -123,12 +141,42 @@ export async function billingRoutes(app: FastifyInstance) {
       )
       select c.id as "companyId", c.name as "companyName",
         coalesce(t.billable_minutes,0) as "billableMinutes", coalesce(t.pending_minutes,0) as "pendingApprovalMinutes",
-        coalesce(t.covered_minutes,0) as "contractCoveredMinutes", coalesce(t.billable_amount,0) as "billableAmount",
+        coalesce(t.covered_minutes,0) as "contractCoveredMinutes", round(coalesce(t.billable_amount,0)::numeric, 2)::float as "billableAmount",
         coalesce(e.expense_count,0) as "expenseCount", coalesce(e.expense_amount,0) as "expenseAmount"
       from companies c left join t on t.company_id = c.id left join e on e.company_id = c.id
       where t.company_id is not null or e.company_id is not null
       order by coalesce(t.billable_amount,0) + coalesce(e.expense_amount,0) desc`);
     return { data: rows.rows };
+  });
+
+  /** What an invoice draft for the company and period would contain. Creates nothing. */
+  app.get('/billing/preview', { config: { perm: 'billing.read' } }, async (req) => {
+    const q = req.query as Record<string, unknown>;
+    const flag = (v: unknown) => (v === undefined || v === '' ? undefined : v === true || v === 'true');
+    const input = invoiceDraftSchema.parse({
+      companyId: q.companyId,
+      periodStart: q.periodStart,
+      periodEnd: q.periodEnd,
+      includeTime: flag(q.includeTime),
+      includeExpenses: flag(q.includeExpenses),
+      includeRecurring: flag(q.includeRecurring),
+      taxRate: q.taxRate,
+    });
+    if (input.periodEnd < input.periodStart) throw badRequest('Period end is before period start');
+    const settings = await getSystemSettings(app.db);
+    const [company] = await app.db.select({ id: s.companies.id, name: s.companies.name }).from(s.companies).where(eq(s.companies.id, input.companyId));
+    if (!company) throw badRequest('Unknown company');
+    const inputs = await gatherBillingInputs(app.db, input, settings.timezone);
+    const { lines } = buildDraftLines(inputs, input);
+    return {
+      companyId: company.id,
+      companyName: company.name,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      currency: settings.currency,
+      lines,
+      ...summarise(lines, input.taxRate ?? settings.defaultTaxRate),
+    };
   });
 
   /* ------------------------------------------------------------- invoices */
@@ -167,7 +215,12 @@ export async function billingRoutes(app: FastifyInstance) {
 
   app.get('/invoices/:id', { config: { perm: 'billing.read' } }, async (req) => loadInvoice(idOf(req)));
 
-  /** Builds a draft invoice from unbilled approved time, billable expenses and recurring services. */
+  /**
+   * Builds a draft invoice from unbilled approved time (overage included),
+   * billable expenses and contract charges (recurring fees and services per
+   * billing period, fixed price, hour blocks, per-ticket fees). Refuses to
+   * create an empty draft.
+   */
   app.post('/invoices/draft', { config: { perm: 'billing.write' } }, async (req, reply) => {
     const input = invoiceDraftSchema.parse(req.body);
     if (input.periodEnd < input.periodStart) throw badRequest('Period end is before period start');
@@ -176,6 +229,12 @@ export async function billingRoutes(app: FastifyInstance) {
       const settings = await getSystemSettings(tx);
       const [company] = await tx.select().from(s.companies).where(eq(s.companies.id, input.companyId));
       if (!company) throw badRequest('Unknown company');
+      // Store up-to-date block coverage on the company's contracts before billing.
+      const contractIds = (await tx.select({ id: s.contracts.id }).from(s.contracts).where(eq(s.contracts.companyId, input.companyId))).map((c) => c.id);
+      await recomputeCoverage(tx, contractIds);
+      const inputs = await gatherBillingInputs(tx, input, settings.timezone);
+      const { lines, timeEntryIds, expenseIds } = buildDraftLines(inputs, input);
+      if (!lines.length) throw nothingToBill(company.name, input);
       const [invoice] = await tx
         .insert(s.invoices)
         .values({
@@ -183,117 +242,15 @@ export async function billingRoutes(app: FastifyInstance) {
           companyId: input.companyId,
           periodStart: input.periodStart,
           periodEnd: input.periodEnd,
-          taxRate: input.taxRate,
+          taxRate: input.taxRate ?? settings.defaultTaxRate,
           currency: settings.currency,
           notes: input.notes,
           createdById: me.id,
         })
         .returning();
-      const lines: (typeof s.invoiceLines.$inferInsert)[] = [];
-      let order = 0;
-
-      if (input.includeRecurring) {
-        const contracts = await tx
-          .select()
-          .from(s.contracts)
-          .where(and(eq(s.contracts.companyId, input.companyId), eq(s.contracts.status, 'active'), inArray(s.contracts.type, ['recurring', 'retainer', 'fixed_price'])));
-        for (const c of contracts) {
-          // Skip contracts already invoiced for an overlapping period.
-          const [dup] = await tx
-            .select({ id: s.invoices.id })
-            .from(s.invoiceLines)
-            .innerJoin(s.invoices, eq(s.invoices.id, s.invoiceLines.invoiceId))
-            .where(
-              and(
-                ne(s.invoices.status, 'void'),
-                ne(s.invoices.id, invoice!.id),
-                sql`${s.invoiceLines.description} like ${`[${c.contractNumber}]%`}`,
-                lte(s.invoices.periodStart, input.periodEnd),
-                gte(s.invoices.periodEnd, input.periodStart),
-              ),
-            )
-            .limit(1);
-          if (dup) continue;
-          if (c.recurringAmount) {
-            lines.push({ invoiceId: invoice!.id, kind: 'service', description: `[${c.contractNumber}] ${c.name} — ${c.billingPeriod} fee`, quantity: 1, unitPrice: c.recurringAmount, amount: c.recurringAmount, sortOrder: order++ });
-          }
-          const svcs = await tx
-            .select({ line: s.contractServices, name: s.services.name })
-            .from(s.contractServices)
-            .innerJoin(s.services, eq(s.services.id, s.contractServices.serviceId))
-            .where(eq(s.contractServices.contractId, c.id));
-          for (const sv of svcs) {
-            lines.push({
-              invoiceId: invoice!.id,
-              kind: 'service',
-              description: `[${c.contractNumber}] ${sv.name}`,
-              quantity: sv.line.quantity,
-              unitPrice: sv.line.unitPrice,
-              amount: round2(sv.line.quantity * sv.line.unitPrice),
-              contractServiceId: sv.line.id,
-              sortOrder: order++,
-            });
-          }
-        }
-      }
-
-      if (input.includeTime) {
-        const entries = await tx
-          .select({ e: s.timeEntries, ticketNumber: s.tickets.ticketNumber, workType: s.workTypes.name, task: s.projectTasks.title })
-          .from(s.timeEntries)
-          .leftJoin(s.tickets, eq(s.tickets.id, s.timeEntries.ticketId))
-          .leftJoin(s.workTypes, eq(s.workTypes.id, s.timeEntries.workTypeId))
-          .leftJoin(s.projectTasks, eq(s.projectTasks.id, s.timeEntries.projectTaskId))
-          .where(
-            and(
-              eq(s.timeEntries.companyId, input.companyId),
-              eq(s.timeEntries.billable, true),
-              eq(s.timeEntries.contractCovered, false),
-              eq(s.timeEntries.status, 'approved'),
-              isNull(s.timeEntries.invoiceId),
-              sql`${s.timeEntries.startedAt}::date between ${input.periodStart}::date and ${input.periodEnd}::date`,
-            ),
-          )
-          .orderBy(asc(s.timeEntries.startedAt));
-        for (const { e, ticketNumber, workType, task } of entries) {
-          const hours = round2(e.durationMinutes / 60);
-          const rate = e.hourlyRate ?? 0;
-          const ref = ticketNumber ?? task ?? '';
-          lines.push({
-            invoiceId: invoice!.id,
-            kind: 'time',
-            description: `${e.startedAt.toISOString().slice(0, 10)} ${ref}${workType ? ` (${workType})` : ''}: ${e.description}`.slice(0, 500),
-            quantity: hours,
-            unitPrice: rate,
-            amount: round2(hours * rate),
-            timeEntryId: e.id,
-            sortOrder: order++,
-          });
-        }
-        if (entries.length) {
-          await tx.update(s.timeEntries).set({ invoiceId: invoice!.id }).where(inArray(s.timeEntries.id, entries.map((x) => x.e.id)));
-        }
-      }
-
-      if (input.includeExpenses) {
-        const exps = await tx
-          .select()
-          .from(s.expenses)
-          .where(
-            and(
-              eq(s.expenses.companyId, input.companyId),
-              eq(s.expenses.billable, true),
-              isNull(s.expenses.invoiceId),
-              sql`${s.expenses.expenseDate} between ${input.periodStart}::date and ${input.periodEnd}::date`,
-            ),
-          );
-        for (const x of exps) {
-          lines.push({ invoiceId: invoice!.id, kind: 'expense', description: `${x.expenseDate} ${x.description}`, quantity: 1, unitPrice: x.amount, amount: x.amount, expenseId: x.id, sortOrder: order++ });
-        }
-        if (exps.length) await tx.update(s.expenses).set({ invoiceId: invoice!.id }).where(inArray(s.expenses.id, exps.map((x) => x.id)));
-      }
-
-      if (lines.length) await tx.insert(s.invoiceLines).values(lines);
+      await tx.insert(s.invoiceLines).values(lines.map((l) => ({ ...l, invoiceId: invoice!.id })));
+      if (timeEntryIds.length) await tx.update(s.timeEntries).set({ invoiceId: invoice!.id }).where(inArray(s.timeEntries.id, timeEntryIds));
+      if (expenseIds.length) await tx.update(s.expenses).set({ invoiceId: invoice!.id }).where(inArray(s.expenses.id, expenseIds));
       await recalcInvoice(tx, invoice!.id);
       await audit(tx, req, { action: 'create', entityType: 'invoice', entityId: invoice!.id, summary: `${invoice!.invoiceNumber} draft with ${lines.length} lines` });
       return invoice!.id;
@@ -308,9 +265,18 @@ export async function billingRoutes(app: FastifyInstance) {
       const [inv] = await tx.select().from(s.invoices).where(eq(s.invoices.id, id));
       if (!inv) throw notFound('Invoice');
       const data: Partial<typeof inv> = {};
-      if (input.notes !== undefined) data.notes = input.notes;
-      if (input.dueDate !== undefined) data.dueDate = input.dueDate;
-      if (input.taxRate !== undefined) {
+      // Notes, due date and tax are part of the issued document: editable on drafts only
+      // (a due date may still be given together with the "issue" transition).
+      const issuing = inv.status === 'draft' && input.status === 'issued';
+      if (input.notes !== undefined && input.notes !== inv.notes) {
+        if (inv.status !== 'draft') throw badRequest('Notes cannot be changed once the invoice is issued');
+        data.notes = input.notes;
+      }
+      if (input.dueDate !== undefined && input.dueDate !== inv.dueDate) {
+        if (inv.status !== 'draft' && !issuing) throw badRequest('The due date cannot be changed once the invoice is issued');
+        data.dueDate = input.dueDate;
+      }
+      if (input.taxRate !== undefined && input.taxRate !== inv.taxRate) {
         if (inv.status !== 'draft') throw badRequest('Only draft invoices can be changed');
         data.taxRate = input.taxRate;
       }
@@ -325,6 +291,7 @@ export async function billingRoutes(app: FastifyInstance) {
           data.dueDate ??= new Date(Date.now() + settings.invoicePaymentTermsDays * 86400_000).toISOString().slice(0, 10);
           await tx.update(s.timeEntries).set({ status: 'billed' }).where(eq(s.timeEntries.invoiceId, id));
         }
+        if (input.status === 'paid') await setBlocksPaid(tx, id, true);
         if (input.status === 'void') await releaseInvoice(tx, id);
       }
       await tx.update(s.invoices).set(data).where(eq(s.invoices.id, id));
