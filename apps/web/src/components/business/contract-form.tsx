@@ -34,6 +34,7 @@ export interface ContractRecord {
   recurringAmount: number | null;
   billingPeriod: string;
   overageRate: number | null;
+  perTicketRate: number | null;
   description: string | null;
   customFields: Record<string, unknown>;
 }
@@ -53,6 +54,7 @@ interface FormValues {
   recurringAmount: string;
   billingPeriod: string;
   overageRate: string;
+  perTicketRate: string;
   description: string;
   customFields: Record<string, unknown>;
 }
@@ -75,19 +77,30 @@ function toForm(c?: ContractRecord | null, companyId?: number | null): FormValue
     recurringAmount: s(c?.recurringAmount),
     billingPeriod: c?.billingPeriod ?? 'monthly',
     overageRate: s(c?.overageRate),
+    perTicketRate: s(c?.perTicketRate),
     description: c?.description ?? '',
     customFields: c?.customFields ?? {},
   };
 }
 
 /** Which commercial fields apply to each contract type. */
-export const CONTRACT_FIELDS: Record<string, { hourly?: boolean; fixed?: boolean; recurring?: boolean; overage?: boolean }> = {
+export const CONTRACT_FIELDS: Record<string, { hourly?: boolean; fixed?: boolean; recurring?: boolean; overage?: boolean; perTicket?: boolean }> = {
   time_materials: { hourly: true },
-  fixed_price: { fixed: true },
+  fixed_price: { fixed: true, hourly: true },
   block_hours: { overage: true, hourly: true },
-  retainer: { recurring: true, overage: true },
-  recurring: { recurring: true },
-  per_ticket: { hourly: true },
+  retainer: { recurring: true, overage: true, hourly: true },
+  recurring: { recurring: true, hourly: true },
+  per_ticket: { perTicket: true, hourly: true },
+};
+
+/** One-line explanation of how each contract type is billed. */
+export const CONTRACT_TYPE_HINTS: Record<string, string> = {
+  time_materials: 'All billable time is invoiced at the contract or work type rates.',
+  fixed_price: 'The fixed amount is invoiced once, on the first invoice covering the start date; billable time is included.',
+  block_hours: 'Customers prepay hour blocks; time uses the remaining hours, oldest block first, and the excess is billed at the overage rate.',
+  retainer: 'A recurring fee every billing period; with hour blocks, time beyond them is billed at the overage rate.',
+  recurring: 'A recurring fee (plus services) every billing period; billable time is included.',
+  per_ticket: 'A fixed fee per ticket resolved in the invoice period; time on the tickets is included.',
 };
 
 export function ContractFormDialog({
@@ -129,8 +142,9 @@ export function ContractFormDialog({
         hourlyRate: f.hourly ? v.hourlyRate || null : null,
         fixedAmount: f.fixed ? v.fixedAmount || null : null,
         recurringAmount: f.recurring ? v.recurringAmount || null : null,
-        billingPeriod: v.billingPeriod,
+        billingPeriod: f.recurring ? v.billingPeriod : contract?.billingPeriod ?? 'monthly',
         overageRate: f.overage ? v.overageRate || null : null,
+        perTicketRate: f.perTicket ? v.perTicketRate || null : null,
         description: v.description || null,
         customFields: v.customFields,
       };
@@ -190,7 +204,7 @@ export function ContractFormDialog({
                 )}
               />
             </FormField>
-            <FormField label="Type" required>
+            <FormField label="Type" required hint={CONTRACT_TYPE_HINTS[type]} className="sm:col-span-2">
               <Select {...register('type')} options={enumOpts(CONTRACT_TYPE)} />
             </FormField>
             <FormField label="Status">
@@ -228,13 +242,8 @@ export function ContractFormDialog({
 
         <FormSection title="Commercial terms">
           <FormGrid cols={3}>
-            {f.hourly && (
-              <FormField label={type === 'block_hours' ? 'Hourly rate (reporting)' : 'Hourly rate'} error={err('hourlyRate')} hint="Overrides work type rates">
-                <Input type="number" step="0.01" min="0" {...register('hourlyRate')} />
-              </FormField>
-            )}
             {f.fixed && (
-              <FormField label="Fixed amount" error={err('fixedAmount')}>
+              <FormField label="Fixed amount" error={err('fixedAmount')} hint="Invoiced once, with the contract start">
                 <Input type="number" step="0.01" min="0" {...register('fixedAmount')} />
               </FormField>
             )}
@@ -243,18 +252,32 @@ export function ContractFormDialog({
                 <Input type="number" step="0.01" min="0" {...register('recurringAmount')} />
               </FormField>
             )}
-            {(f.recurring || f.fixed) && (
-              <FormField label="Billing period">
+            {f.recurring && (
+              <FormField label="Billing period" hint="Periods start on the contract start date">
                 <Select {...register('billingPeriod')} options={enumOpts(BILLING_PERIOD)} />
               </FormField>
             )}
+            {f.perTicket && (
+              <FormField label="Per-ticket rate" error={err('perTicketRate')} hint="Invoiced for every ticket resolved">
+                <Input type="number" step="0.01" min="0" {...register('perTicketRate')} />
+              </FormField>
+            )}
             {f.overage && (
-              <FormField label="Overage rate" error={err('overageRate')} hint="Per hour beyond purchased hours">
+              <FormField label="Overage rate" error={err('overageRate')} hint={type === 'retainer' ? 'Per hour beyond the retainer blocks' : 'Per hour beyond purchased hours'}>
                 <Input type="number" step="0.01" min="0" {...register('overageRate')} />
               </FormField>
             )}
+            {f.hourly && (
+              <FormField
+                label="Hourly rate"
+                error={err('hourlyRate')}
+                hint={type === 'time_materials' ? 'Overrides work type rates' : type === 'block_hours' ? 'Used for excluded work types (overage rate wins otherwise)' : 'For billable time not covered (e.g. excluded work types)'}
+              >
+                <Input type="number" step="0.01" min="0" {...register('hourlyRate')} />
+              </FormField>
+            )}
           </FormGrid>
-          {type === 'block_hours' && <p className="text-xs text-muted">Purchased hour blocks are added on the contract after it is created.</p>}
+          {(type === 'block_hours' || type === 'retainer') && <p className="text-xs text-muted">Hour blocks are added on the contract's Blocks tab after it is created; unpaid blocks with an amount are invoiced.</p>}
         </FormSection>
 
         <Controller control={control} name="customFields" render={({ field }) => <CustomFieldsEditor entity="contract" value={field.value} onChange={field.onChange} errors={formState.errors} />} />

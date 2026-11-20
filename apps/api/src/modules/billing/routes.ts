@@ -149,6 +149,12 @@ export async function billingRoutes(app: FastifyInstance) {
     return { data: rows.rows };
   });
 
+  /** Billing defaults for the invoice-draft form. */
+  app.get('/billing/defaults', { config: { perm: 'billing.read' } }, async () => {
+    const settings = await getSystemSettings(app.db);
+    return { defaultTaxRate: settings.defaultTaxRate, currency: settings.currency, timezone: settings.timezone };
+  });
+
   /** What an invoice draft for the company and period would contain. Creates nothing. */
   app.get('/billing/preview', { config: { perm: 'billing.read' } }, async (req) => {
     const q = req.query as Record<string, unknown>;
