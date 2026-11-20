@@ -36,7 +36,18 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
-export async function request<T>(method: string, path: string, body?: unknown, opts: { query?: Query; raw?: boolean } = {}): Promise<T> {
+/**
+ * Called when a DELETE fails because the record is still referenced (409 in_use). Registered by
+ * the force-delete dialog for super administrators: it resolves with the forced delete's response,
+ * or rejects when the user cancels. Callers of api.delete() see a normal success in that case.
+ */
+type ForceDeleteHandler = (path: string, error: ApiError) => Promise<unknown>;
+let forceDeleteHandler: ForceDeleteHandler | null = null;
+export function setForceDeleteHandler(fn: ForceDeleteHandler | null) {
+  forceDeleteHandler = fn;
+}
+
+export async function request<T>(method: string, path: string, body?: unknown, opts: { query?: Query; raw?: boolean; noForce?: boolean } = {}): Promise<T> {
   const headers: Record<string, string> = {};
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
   if (body !== undefined && !isForm) headers['content-type'] = 'application/json';
@@ -56,7 +67,11 @@ export async function request<T>(method: string, path: string, body?: unknown, o
   if (!res.ok) {
     const err = (data as { error?: { code?: string; message?: string; details?: { fields?: Record<string, string> } } })?.error;
     if (res.status === 401 && onUnauthorized && !path.startsWith('/auth/login') && !path.startsWith('/setup')) onUnauthorized();
-    throw new ApiError(res.status, err?.code ?? 'error', err?.message ?? res.statusText, err?.details?.fields ?? {});
+    const error = new ApiError(res.status, err?.code ?? 'error', err?.message ?? res.statusText, err?.details?.fields ?? {});
+    if (method === 'DELETE' && res.status === 409 && error.code === 'in_use' && forceDeleteHandler && !opts.noForce) {
+      return (await forceDeleteHandler(path, error)) as T;
+    }
+    throw error;
   }
   return data as T;
 }
