@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, CheckCheck } from 'lucide-react';
 import { api, type Paginated } from '@/lib/api';
 import { cn, fmtRelative } from '@/lib/utils';
+import { translate as t } from '@/lib/i18n';
 import { Button } from '../ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/overlays';
 
@@ -34,7 +35,7 @@ export function NotificationBell() {
   return (
     <Popover onOpenChange={(o) => o && list.refetch()}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label={`Notifications (${unread} unread)`} className="relative">
+        <Button variant="ghost" size="icon" aria-label={t('Notifications ({count} unread)', { count: unread })} className="relative">
           <Bell />
           {unread > 0 && (
             <span className="absolute right-1 top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-danger px-0.5 text-[9px] font-bold text-white">
@@ -45,7 +46,7 @@ export function NotificationBell() {
       </PopoverTrigger>
       <PopoverContent align="end" className="w-96 p-0">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
-          <span className="text-[13px] font-semibold">Notifications</span>
+          <span className="text-[13px] font-semibold">{t('Notifications')}</span>
           <div className="flex gap-1">
             <Button size="sm" variant="ghost" onClick={() => markAll.mutate()} disabled={!unread}>
               <CheckCheck /> Mark all read
@@ -56,7 +57,7 @@ export function NotificationBell() {
           </div>
         </div>
         <div className="max-h-96 overflow-y-auto">
-          {(list.data?.data ?? []).length === 0 && <p className="px-3 py-6 text-center text-xs text-muted">You're all caught up.</p>}
+          {(list.data?.data ?? []).length === 0 && <p className="px-3 py-6 text-center text-xs text-muted">{t("You're all caught up.")}</p>}
           {list.data?.data.map((n) => (
             <button key={n.id} onClick={() => open(n)} className={cn('block w-full cursor-pointer border-b border-border px-3 py-2 text-left hover:bg-surface-2', !n.readAt && 'bg-primary-soft/40')}>
               <div className="flex items-start gap-2">

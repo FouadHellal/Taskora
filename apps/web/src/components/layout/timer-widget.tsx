@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pause, Timer, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { translate as t } from '@/lib/i18n';
 import { useLookups, opts } from '@/lib/lookups';
 import { Button } from '../ui/button';
 import { Checkbox, Select, Textarea } from '../ui/input';
@@ -44,20 +45,20 @@ export function TimerWidget() {
     return () => clearInterval(id);
   }, [timer.data]);
   if (!timer.data) return null;
-  const t = timer.data;
+  const tm = timer.data;
   return (
     <>
       <div className="flex h-8 items-center gap-1 rounded-md border border-primary/30 bg-primary-soft pl-2 text-[12px] text-primary">
         <Timer className="size-3.5 animate-pulse" />
-        <Link to={t.ticketId ? `/tickets/${t.ticketId}` : '/time'} className="max-w-40 truncate font-medium hover:underline">
-          {t.ticketNumber ?? t.taskTitle ?? 'Timer'}
+        <Link to={tm.ticketId ? `/tickets/${tm.ticketId}` : '/time'} className="max-w-40 truncate font-medium hover:underline">
+          {tm.ticketNumber ?? tm.taskTitle ?? t('Timer')}
         </Link>
-        <span className="font-mono tabular-nums">{elapsedLabel(t.startedAt, now)}</span>
-        <Button size="icon-sm" variant="ghost" className="text-primary" onClick={() => setStopping(true)} aria-label="Stop timer">
+        <span className="font-mono tabular-nums">{elapsedLabel(tm.startedAt, now)}</span>
+        <Button size="icon-sm" variant="ghost" className="text-primary" onClick={() => setStopping(true)} aria-label={t('Stop timer')}>
           <Pause />
         </Button>
       </div>
-      <StopTimerDialog open={stopping} onOpenChange={setStopping} timer={t} />
+      <StopTimerDialog open={stopping} onOpenChange={setStopping} timer={tm} />
     </>
   );
 }
@@ -71,7 +72,7 @@ export function StopTimerDialog({ open, onOpenChange, timer }: { open: boolean; 
   const stop = useMutation({
     mutationFn: () => api.post('/timer/stop', { description, workTypeId: workTypeId ? Number(workTypeId) : null, billable }),
     onSuccess: () => {
-      toast.success('Time entry saved');
+      toast.success(t('Time entry saved'));
       onOpenChange(false);
       qc.invalidateQueries({ queryKey: ['timer'] });
       qc.invalidateQueries({ queryKey: ['time-entries'] });
@@ -85,7 +86,7 @@ export function StopTimerDialog({ open, onOpenChange, timer }: { open: boolean; 
     onSuccess: () => {
       onOpenChange(false);
       qc.invalidateQueries({ queryKey: ['timer'] });
-      toast('Timer discarded');
+      toast(t('Timer discarded'));
     },
   });
   return (

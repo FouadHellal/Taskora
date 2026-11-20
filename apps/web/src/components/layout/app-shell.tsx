@@ -6,6 +6,7 @@ import { ChevronsLeft, ChevronsRight, CircleHelp, Laptop, LogOut, Mail, Menu, Mo
 import { api } from '@/lib/api';
 import { useAuth, useMe } from '@/lib/auth';
 import { cn } from '@/lib/utils';
+import { translate as t } from '@/lib/i18n';
 import { SidebarNav } from './sidebar-nav';
 import { logoUrl } from '../logo';
 import { Avatar, Kbd } from '../ui/misc';
@@ -83,10 +84,10 @@ export function AppShell() {
               className="fixed inset-y-0 left-0 z-50 flex w-[min(18rem,85vw)] flex-col bg-sidebar pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] text-sidebar-fg shadow-2xl focus:outline-none"
               aria-describedby={undefined}
             >
-              <DialogPrimitive.Title className="sr-only">Menu</DialogPrimitive.Title>
+              <DialogPrimitive.Title className="sr-only">{t('Menu')}</DialogPrimitive.Title>
               <div className="flex items-center justify-between pr-2">
                 {brand}
-                <DialogPrimitive.Close className="flex size-9 cursor-pointer items-center justify-center rounded-md text-sidebar-muted hover:text-white" aria-label="Close menu">
+                <DialogPrimitive.Close className="flex size-9 cursor-pointer items-center justify-center rounded-md text-sidebar-muted hover:text-white" aria-label={t('Close menu')}>
                   <X className="size-5" />
                 </DialogPrimitive.Close>
               </div>
@@ -103,10 +104,10 @@ export function AppShell() {
           <button
             onClick={() => setCollapsed((c) => !c)}
             className="flex h-9 shrink-0 cursor-pointer items-center gap-2 border-t border-white/5 px-4 text-xs text-sidebar-muted hover:text-white"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={t(collapsed ? 'Expand sidebar' : 'Collapse sidebar')}
           >
             {collapsed ? <ChevronsRight className="size-4" /> : <ChevronsLeft className="size-4" />}
-            {!collapsed && 'Collapse'}
+            {!collapsed && t('Collapse')}
           </button>
         </aside>
       )}
@@ -114,12 +115,12 @@ export function AppShell() {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-2 sm:gap-3 sm:px-4">
           {narrow && (
-            <Button variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label="Open menu">
+            <Button variant="ghost" size="icon" onClick={() => setMenuOpen(true)} aria-label={t('Open menu')}>
               <Menu />
             </Button>
           )}
           {narrow ? (
-            <Button variant="ghost" size="icon" onClick={() => setPaletteOpen(true)} aria-label="Search">
+            <Button variant="ghost" size="icon" onClick={() => setPaletteOpen(true)} aria-label={t('Search')}>
               <Search />
             </Button>
           ) : (
@@ -128,13 +129,13 @@ export function AppShell() {
               className="flex h-8 w-full max-w-md cursor-pointer items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 text-[13px] text-muted hover:border-border-strong"
             >
               <Search className="size-3.5" />
-              <span className="flex-1 truncate text-left">Search tickets, companies, contacts, devices…</span>
+              <span className="flex-1 truncate text-left">{t('Search tickets, companies, contacts, devices…')}</span>
               <Kbd>Ctrl K</Kbd>
             </button>
           )}
           <div className="ml-auto flex items-center gap-1 sm:gap-1.5">
             {can('tickets.write') && (
-              <Button variant="primary" size={narrow ? 'icon' : 'sm'} onClick={() => navigate('/tickets/new', { state: { from: location.pathname } })} aria-label="New ticket">
+              <Button variant="primary" size={narrow ? 'icon' : 'sm'} onClick={() => navigate('/tickets/new', { state: { from: location.pathname } })} aria-label={t('New ticket')}>
                 <Plus /> {!narrow && 'New ticket'}
               </Button>
             )}
@@ -150,7 +151,7 @@ export function AppShell() {
             <NotificationBell />
             <DropdownMenu>
               <DropdownTrigger asChild>
-                <button className="ml-1 flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2" aria-label="Account menu">
+                <button className="ml-1 flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-surface-2" aria-label={t('Account menu')}>
                   <Avatar name={`${me.user.firstName} ${me.user.lastName}`} />
                   <span className="hidden text-left leading-tight md:block">
                     <span className="block text-[12px] font-medium">
@@ -164,13 +165,13 @@ export function AppShell() {
                 <DropdownLabel>{me.organization.name}</DropdownLabel>
                 <DropdownSeparator />
                 <DropdownItem onSelect={() => setTheme('light')}>
-                  <Sun /> Light {theme === 'light' && '✓'}
+                  <Sun /> {t('Light')} {theme === 'light' && '✓'}
                 </DropdownItem>
                 <DropdownItem onSelect={() => setTheme('dark')}>
-                  <Moon /> Dark {theme === 'dark' && '✓'}
+                  <Moon /> {t('Dark')} {theme === 'dark' && '✓'}
                 </DropdownItem>
                 <DropdownItem onSelect={() => setTheme('system')}>
-                  <Monitor /> System {theme === 'system' && '✓'}
+                  <Monitor /> {t('System')} {theme === 'system' && '✓'}
                 </DropdownItem>
                 <DropdownSeparator />
                 <DropdownItem onSelect={() => setShortcutsOpen(true)}>
@@ -183,7 +184,7 @@ export function AppShell() {
                       await refresh();
                     }}
                   >
-                    <Mail /> E-mail notifications: {me.preferences.emailNotifications === false ? 'off' : 'on'}
+                    <Mail /> {t(me.preferences.emailNotifications === false ? 'E-mail notifications: off' : 'E-mail notifications: on')}
                   </DropdownItem>
                 )}
                 <DropdownItem onSelect={() => setSessionsOpen(true)}>

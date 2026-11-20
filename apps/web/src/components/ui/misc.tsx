@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { translate, translateNode } from '@/lib/i18n';
 
 export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('rounded-lg border border-border bg-surface shadow-card', className)} {...props} />;
@@ -10,8 +11,8 @@ export function CardHeader({ title, actions, description, className }: { title: 
   return (
     <div className={cn('flex items-center justify-between gap-2 border-b border-border px-4 py-2.5', className)}>
       <div className="min-w-0">
-        <h3 className="truncate text-[13px] font-semibold">{title}</h3>
-        {description && <p className="text-xs text-muted">{description}</p>}
+        <h3 className="truncate text-[13px] font-semibold">{translateNode(title)}</h3>
+        {description && <p className="text-xs text-muted">{translateNode(description)}</p>}
       </div>
       {actions && <div className="flex shrink-0 items-center gap-1.5">{actions}</div>}
     </div>
@@ -69,8 +70,8 @@ export function EmptyState({ icon, title, description, action }: { icon?: ReactN
   return (
     <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
       {icon && <div className="mb-3 text-subtle [&_svg]:size-8">{icon}</div>}
-      <p className="text-sm font-medium">{title}</p>
-      {description && <p className="mt-1 max-w-sm text-xs text-muted">{description}</p>}
+      <p className="text-sm font-medium">{translate(title)}</p>
+      {description && <p className="mt-1 max-w-sm text-xs text-muted">{translateNode(description)}</p>}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
@@ -105,7 +106,7 @@ export function Avatar({ name, className }: { name?: string | null; className?: 
 export function Field({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
     <div className={cn('min-w-0', className)}>
-      <dt className="text-[11px] font-medium uppercase tracking-wide text-subtle">{label}</dt>
+      <dt className="text-[11px] font-medium uppercase tracking-wide text-subtle">{translate(label)}</dt>
       <dd className="mt-0.5 truncate text-[13px]">{children ?? <span className="text-subtle">—</span>}</dd>
     </div>
   );
@@ -119,9 +120,9 @@ export function Stat({ label, value, hint, tone, onClick }: { label: string; val
       onClick={onClick}
       className={cn('rounded-lg border border-border bg-surface px-3.5 py-2.5 text-left shadow-card', onClick && 'cursor-pointer transition-colors hover:border-border-strong')}
     >
-      <div className="text-[11px] font-medium uppercase tracking-wide text-muted">{label}</div>
+      <div className="text-[11px] font-medium uppercase tracking-wide text-muted">{translate(label)}</div>
       <div className={cn('mt-0.5 text-xl font-semibold tabular-nums', color)}>{value}</div>
-      {hint && <div className="mt-0.5 truncate text-[11px] text-muted">{hint}</div>}
+      {hint && <div className="mt-0.5 truncate text-[11px] text-muted">{translateNode(hint)}</div>}
     </Comp>
   );
 }

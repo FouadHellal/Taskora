@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { translate } from '@/lib/i18n';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Dialog } from '../ui/overlays';
@@ -15,7 +16,7 @@ export function ChangePasswordDialog({ open, onOpenChange }: { open: boolean; on
   const save = useMutation({
     mutationFn: () => api.post('/auth/change-password', { currentPassword: current, newPassword: next }),
     onSuccess: () => {
-      toast.success('Password changed. Other sessions were signed out.');
+      toast.success(translate('Password changed. Other sessions were signed out.'));
       onOpenChange(false);
       setCurrent('');
       setNext('');

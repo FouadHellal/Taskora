@@ -23,9 +23,10 @@ export interface Me {
     currency: string;
     timezone: string;
     logoUpdatedAt?: string | null;
-    /** Default UI language (en, fr, nl, de, es); a user's `preferences.language` overrides it. */
-    language?: string;
-    dateFormat?: string;
+    /** Default UI language of the organization; a user's `preferences.language` overrides it. */
+    language?: 'en' | 'fr' | 'nl' | 'de' | 'es';
+    /** 'auto' (language default) or an explicit date pattern. */
+    dateFormat?: 'auto' | 'dd/MM/yyyy' | 'MM/dd/yyyy' | 'yyyy-MM-dd' | 'dd.MM.yyyy';
     /** Org default for opening tickets in their own window; `preferences.ticketOpenMode` overrides it. */
     ticketsOpenInWindow?: boolean;
   };

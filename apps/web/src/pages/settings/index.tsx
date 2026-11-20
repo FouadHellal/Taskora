@@ -34,6 +34,7 @@ import {
 import { toast } from 'sonner';
 import type { Permission } from '@taskora/shared';
 import { api } from '@/lib/api';
+import { LANGUAGES } from '@/lib/i18n';
 import { useAuth } from '@/lib/auth';
 import { opts, useLookups } from '@/lib/lookups';
 import { cn, fmtDateTime, fmtRelative } from '@/lib/utils';
@@ -49,14 +50,7 @@ import { useTabParam } from '@/components/admin/tabs';
 import { InboundEmailLog } from '@/components/admin/inbound-email';
 import { EntityPicker } from '@/components/entity-picker';
 
-/** Interface languages (labels in their own language). */
-export const UI_LANGUAGES = [
-  { code: 'en', label: 'English' },
-  { code: 'fr', label: 'Français' },
-  { code: 'nl', label: 'Nederlands' },
-  { code: 'de', label: 'Deutsch' },
-  { code: 'es', label: 'Español' },
-];
+const UI_LANGUAGES = LANGUAGES;
 
 const CURRENCIES = [
   ['EUR', 'Euro (€)'],

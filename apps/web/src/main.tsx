@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { ApiError } from './lib/api';
 import { AuthProvider } from './lib/auth';
+import { I18nProvider } from './lib/i18n';
 import { TooltipProvider } from './components/ui/overlays';
 import { App } from './App';
 import { ForceDeleteHost } from './components/force-delete-dialog';
@@ -25,11 +26,13 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <TooltipProvider>
-            <App />
-            <ForceDeleteHost />
-            <Toaster position="bottom-right" richColors closeButton toastOptions={{ className: 'text-[13px]' }} />
-          </TooltipProvider>
+          <I18nProvider>
+            <TooltipProvider>
+              <App />
+              <ForceDeleteHost />
+            </TooltipProvider>
+          </I18nProvider>
+          <Toaster position="bottom-right" richColors closeButton toastOptions={{ className: 'text-[13px]' }} />
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

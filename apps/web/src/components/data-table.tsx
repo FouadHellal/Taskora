@@ -1,7 +1,8 @@
 import { useMemo, type ReactNode } from 'react';
-import { flexRender, getCoreRowModel, useReactTable, type ColumnDef, type RowSelectionState, type Table } from '@tanstack/react-table';
+import { flexRender, getCoreRowModel, useReactTable, type ColumnDef, type Header, type RowSelectionState, type Table } from '@tanstack/react-table';
 import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { translate } from '@/lib/i18n';
 import { usePhone } from '@/hooks/use-media-query';
 import { Button } from './ui/button';
 import { EmptyState, Skeleton } from './ui/misc';
@@ -18,6 +19,12 @@ export type Column<T> = ColumnDef<T, unknown> & {
     mobile?: 'primary' | 'secondary' | 'hide';
   };
 };
+
+/** Column header; plain-string headers are translated. */
+function headerText<T>(h: Header<T, unknown>): ReactNode {
+  const def = h.column.columnDef.header;
+  return typeof def === 'string' ? translate(def) : flexRender(def, h.getContext());
+}
 
 export interface Sort {
   sort?: string;
@@ -78,7 +85,7 @@ export function DataTable<T>({
         header: ({ table }) => (
           <input
             type="checkbox"
-            aria-label="Select all"
+            aria-label={translate('Select all')}
             className="size-3.5 cursor-pointer accent-[var(--primary)]"
             checked={table.getIsAllRowsSelected()}
             ref={(el) => {
@@ -90,7 +97,7 @@ export function DataTable<T>({
         cell: ({ row }) => (
           <input
             type="checkbox"
-            aria-label="Select row"
+            aria-label={translate('Select row')}
             className="size-3.5 cursor-pointer accent-[var(--primary)]"
             checked={row.getIsSelected()}
             onClick={(e) => e.stopPropagation()}
@@ -154,11 +161,11 @@ export function DataTable<T>({
                           className="inline-flex cursor-pointer items-center gap-1 uppercase hover:text-foreground"
                           onClick={() => onSortChange({ sort: sortKey, order: active && sort?.order === 'asc' ? 'desc' : 'asc' })}
                         >
-                          {flexRender(h.column.columnDef.header, h.getContext())}
+                          {headerText(h)}
                           {active ? sort?.order === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" /> : <ChevronsUpDown className="size-3 opacity-40" />}
                         </button>
                       ) : (
-                        flexRender(h.column.columnDef.header, h.getContext())
+                        headerText(h)
                       )}
                     </th>
                   );
@@ -208,17 +215,15 @@ export function DataTable<T>({
       )}
       {onPageChange && total > 0 && (
         <div className="flex shrink-0 items-center justify-between border-t border-border bg-surface px-3 py-1.5 text-xs text-muted">
-          <span className="tabular-nums">
-            {from}–{to} of {total}
-          </span>
+          <span className="tabular-nums">{translate('{from}–{to} of {total}', { from, to, total })}</span>
           <div className="flex items-center gap-1">
-            <Button size="icon-sm" variant="ghost" disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label="Previous page">
+            <Button size="icon-sm" variant="ghost" disabled={page <= 1} onClick={() => onPageChange(page - 1)} aria-label={translate('Previous page')}>
               <ChevronLeft />
             </Button>
             <span className="tabular-nums">
               {page} / {pages}
             </span>
-            <Button size="icon-sm" variant="ghost" disabled={page >= pages} onClick={() => onPageChange(page + 1)} aria-label="Next page">
+            <Button size="icon-sm" variant="ghost" disabled={page >= pages} onClick={() => onPageChange(page + 1)} aria-label={translate('Next page')}>
               <ChevronRight />
             </Button>
           </div>
@@ -258,10 +263,10 @@ function CardList<T>({
     if (!h || id === '__select') return null;
     const def = h.column.columnDef.header;
     if (!def) return null;
-    return typeof def === 'string' ? def : flexRender(def, h.getContext());
+    return headerText(h);
   };
   const sortable = headers
-    .map((h) => ({ key: (h.column.columnDef as Column<T>).meta?.sortKey, text: typeof h.column.columnDef.header === 'string' ? h.column.columnDef.header : '' }))
+    .map((h) => ({ key: (h.column.columnDef as Column<T>).meta?.sortKey, text: typeof h.column.columnDef.header === 'string' ? translate(h.column.columnDef.header) : '' }))
     .filter((x): x is { key: string; text: string } => !!x.key && !!x.text);
 
   if (loading && !hasData) {
@@ -281,7 +286,7 @@ function CardList<T>({
     <>
       {onSortChange && sortable.length > 0 && hasData && (
         <div className="flex items-center gap-2 border-b border-border bg-surface-2 px-3 py-1.5 text-xs text-muted">
-          <span>Sort by</span>
+          <span>{translate('Sort by')}</span>
           <select
             className="h-7 min-w-0 flex-1 rounded border border-border bg-surface px-1.5 text-foreground"
             value={sort?.sort ?? ''}
@@ -297,7 +302,7 @@ function CardList<T>({
           <Button
             size="icon-sm"
             variant="ghost"
-            aria-label={sort?.order === 'desc' ? 'Sort ascending' : 'Sort descending'}
+            aria-label={translate(sort?.order === 'desc' ? 'Sort ascending' : 'Sort descending')}
             disabled={!sort?.sort}
             onClick={() => sort?.sort && onSortChange({ sort: sort.sort, order: sort.order === 'asc' ? 'desc' : 'asc' })}
           >
