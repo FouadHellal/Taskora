@@ -219,6 +219,8 @@ export const customFieldDefinitions = pgTable(
     isActive: boolean('is_active').notNull().default(true),
     sortOrder: integer('sort_order').notNull().default(0),
     helpText: text('help_text'),
+    /** Optional tab name: fields sharing a tab are shown together as their own tab on the record (tickets). */
+    tab: text('tab'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

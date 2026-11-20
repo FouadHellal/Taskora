@@ -13,6 +13,7 @@ import { useTabParam } from '@/components/admin/tabs';
 
 interface FieldRow extends CustomFieldDef {
   sortOrder: number;
+  tab?: string | null;
 }
 
 const columns: Column<FieldRow>[] = [
@@ -36,6 +37,7 @@ const columns: Column<FieldRow>[] = [
       </span>
     ),
   },
+  { header: 'Tab', cell: ({ row }) => (row.original.tab ? <Badge tone="primary">{row.original.tab}</Badge> : <span className="text-xs text-subtle">Details card</span>) },
   { header: 'Required', cell: ({ row }) => <YesNo value={row.original.isRequired} /> },
   { header: 'Status', meta: { className: 'w-24' }, cell: ({ row }) => <ActiveBadge active={row.original.isActive} /> },
 ];
@@ -65,6 +67,13 @@ const fields: SettingsField<FieldRow>[] = [
     rules: { validate: (v, all) => all.type !== 'select' || String(v ?? '').trim().length > 0 || 'Add at least one option' },
   },
   { name: 'helpText', label: 'Help text', type: 'text', span: 2, placeholder: 'Shown below the field in forms' },
+  {
+    name: 'tab',
+    label: 'Show in tab',
+    type: 'text',
+    placeholder: 'e.g. Onboarding, Hardware, Billing',
+    hint: 'Optional. Fields with the same tab name get their own tab on the ticket (and record) page; leave empty to show them in the Custom fields card.',
+  },
   { name: 'isRequired', label: 'Required', type: 'checkbox' },
   { name: 'isActive', label: 'Active', type: 'checkbox', hint: 'Inactive fields are hidden from forms; stored values are kept' },
 ];
@@ -112,7 +121,7 @@ function EntityFields({ entity, canWrite }: { entity: CustomFieldEntity; canWrit
       params={{ entity }}
       columns={columns}
       fields={fields}
-      defaults={{ label: '', key: '', type: 'text', options: [], isRequired: false, isActive: true, sortOrder: 0, helpText: '' }}
+      defaults={{ label: '', key: '', type: 'text', options: [], isRequired: false, isActive: true, sortOrder: 0, helpText: '', tab: '' }}
       canWrite={canWrite}
       rowLabel={(r) => r.label}
       emptyText={`No custom fields for ${CUSTOM_FIELD_ENTITY.labels[entity].toLowerCase()} records yet.`}

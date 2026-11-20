@@ -658,6 +658,8 @@ export const customFieldSchema = z.object({
   isActive: z.boolean().default(true),
   sortOrder: z.coerce.number().int().default(0),
   helpText: optText(255),
+  /** Group the field under its own tab on the record (e.g. "Hardware", "Onboarding"). */
+  tab: optText(40),
 });
 
 export const notificationTemplateSchema = z.object({

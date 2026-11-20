@@ -18,7 +18,19 @@ export interface Me {
   csrfToken: string;
   preferences: Record<string, unknown>;
   emailEnabled: boolean;
-  organization: { name: string; currency: string; timezone: string; logoUpdatedAt?: string | null };
+  organization: {
+    name: string;
+    currency: string;
+    timezone: string;
+    logoUpdatedAt?: string | null;
+    /** Default UI language (en, fr, nl, de, es); a user's `preferences.language` overrides it. */
+    language?: string;
+    dateFormat?: string;
+    /** Org default for opening tickets in their own window; `preferences.ticketOpenMode` overrides it. */
+    ticketsOpenInWindow?: boolean;
+  };
+  /** Role grants every permission ('*'): may force-delete records that are still referenced. */
+  superAdmin?: boolean;
 }
 
 interface AuthState {

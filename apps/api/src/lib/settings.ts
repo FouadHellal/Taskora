@@ -7,6 +7,14 @@ export const systemSettingsSchema = z.object({
   organizationName: z.string().trim().min(1).max(120).default('Taskora'),
   timezone: z.string().min(1).max(64).default('UTC'),
   currency: z.string().length(3).default('EUR'),
+  /** Default interface language for users who have not chosen one (en, fr, nl, de, es). */
+  language: z.enum(['en', 'fr', 'nl', 'de', 'es']).catch('en').default('en'),
+  /** Date display format ('auto' follows the browser locale). */
+  dateFormat: z.enum(['auto', 'dd/MM/yyyy', 'MM/dd/yyyy', 'yyyy-MM-dd', 'dd.MM.yyyy']).catch('auto').default('auto'),
+  /** Open tickets in their own browser window (like Autotask) unless a user chooses otherwise. */
+  ticketsOpenInWindow: z.boolean().default(true),
+  /** Default tax rate (%) proposed on new invoices. */
+  defaultTaxRate: z.coerce.number().min(0).max(100).default(0),
   ticketPrefix: z.string().trim().max(10).default('TKA-'),
   ciPrefix: z.string().trim().max(10).default('CI-'),
   contractPrefix: z.string().trim().max(10).default('CTR-'),

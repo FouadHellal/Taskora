@@ -128,7 +128,16 @@ export async function authRoutes(app: FastifyInstance) {
       preferences: prefs?.preferences ?? {},
       emailEnabled: !!(await resolveSmtp(app.db, app.config)),
       csrfToken: req.csrfToken,
-      organization: { name: settings.organizationName, currency: settings.currency, timezone: settings.timezone, logoUpdatedAt: settings.logoUpdatedAt },
+      organization: {
+        name: settings.organizationName,
+        currency: settings.currency,
+        timezone: settings.timezone,
+        logoUpdatedAt: settings.logoUpdatedAt,
+        language: settings.language,
+        dateFormat: settings.dateFormat,
+        ticketsOpenInWindow: settings.ticketsOpenInWindow,
+      },
+      superAdmin: user.permissions.includes('*'),
     };
   });
 
@@ -175,7 +184,7 @@ export async function authRoutes(app: FastifyInstance) {
     const me = currentUser(req);
     const body = (req.body ?? {}) as Record<string, unknown>;
     const allowed: Record<string, unknown> = {};
-    for (const key of ['theme', 'sidebarCollapsed', 'ticketColumns', 'defaultTicketView', 'emailNotifications']) {
+    for (const key of ['theme', 'sidebarCollapsed', 'ticketColumns', 'defaultTicketView', 'emailNotifications', 'language', 'ticketOpenMode', 'ticketTab']) {
       if (key in body) allowed[key] = body[key];
     }
     if (typeof body.timezone === 'string' && body.timezone.length < 64) {

@@ -219,3 +219,44 @@ export const atlasEntities = pgTable(
     index('atlas_entities_status_idx').on(t.matchStatus),
   ],
 );
+
+/**
+ * Personal API keys ("tka_…"): Bearer tokens that act as their owner, with the owner's role
+ * permissions, for automation tools such as n8n, Power Automate or scripts. CSRF does not apply.
+ */
+export const apiKeys = pgTable(
+  'api_keys',
+  {
+    id: id(),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    prefix: text('prefix').notNull(),
+    tokenHash: text('token_hash').notNull().unique(),
+    createdAt: createdAt(),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    lastUsedIp: text('last_used_ip'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [index('api_keys_user_idx').on(t.userId)],
+);
+
+/** Outbound webhooks: Taskora POSTs a signed JSON event to `url` (n8n, Zapier, Teams…). */
+export const webhooks = pgTable('webhooks', {
+  id: id(),
+  name: text('name').notNull(),
+  url: text('url').notNull(),
+  /** Event names (e.g. ticket.created) or '*' for all. */
+  events: text('events').array().notNull(),
+  /** AES-GCM encrypted HMAC secret (X-Taskora-Signature: sha256=…). */
+  secretEncrypted: text('secret_encrypted'),
+  isActive: boolean('is_active').notNull().default(true),
+  lastStatus: integer('last_status'),
+  lastError: text('last_error'),
+  lastDeliveredAt: timestamp('last_delivered_at', { withTimezone: true }),
+  createdById: integer('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
