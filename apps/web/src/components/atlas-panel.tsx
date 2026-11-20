@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { TicketLink } from '@/lib/open-ticket';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, AlertTriangle, ExternalLink } from 'lucide-react';
 import { api } from '@/lib/api';
@@ -134,9 +135,9 @@ export function AtlasCiPanel({ ciId }: { ciId: number }) {
               <li key={i.key} className="flex items-center justify-between gap-2">
                 <span className="min-w-0 truncate">
                   {i.ticketId ? (
-                    <Link className="hover:text-primary" to={`/tickets/${i.ticketId}`}>
+                    <TicketLink className="hover:text-primary" ticketId={i.ticketId}>
                       {i.title}
-                    </Link>
+                    </TicketLink>
                   ) : (
                     i.title
                   )}

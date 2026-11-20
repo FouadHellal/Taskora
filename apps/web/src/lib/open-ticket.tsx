@@ -77,6 +77,14 @@ export function useOpenTicket() {
   );
 }
 
+/** Whether tickets should open in their own window here (preference, not a phone, not already in one). */
+export function useTicketWindowPreferred() {
+  const { me } = useAuth();
+  const narrow = useNarrow();
+  const standalone = useStandaloneTicket();
+  return !narrow && !standalone && ticketOpenMode(me) === 'window';
+}
+
 const TICKET_PATH = /^\/tickets\/(\d+)$/;
 
 /** Navigates to an app link, opening ticket links with `useOpenTicket`. */

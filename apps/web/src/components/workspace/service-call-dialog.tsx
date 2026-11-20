@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+
 import { Controller, useForm } from 'react-hook-form';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { ConfirmDialog, Dialog } from '@/components/ui/overlays';
 import { Avatar, Badge, type Tone } from '@/components/ui/misc';
 import { FormField, FormGrid, handleFormError } from '@/components/form';
 import { EntityPicker } from '@/components/entity-picker';
+import { TicketLink } from '@/lib/open-ticket';
 
 export interface ServiceCall {
   id: number;
@@ -280,9 +281,9 @@ export function ServiceCallDialog({
               <div className="space-y-1.5">
                 {tickets.map((t) => (
                   <div key={t.id} className="flex items-center gap-2 rounded-md border border-border bg-surface-2/50 px-2 py-1 text-[13px]">
-                    <Link to={`/tickets/${t.id}`} className="min-w-0 flex-1 truncate hover:text-primary" onClick={() => onOpenChange(false)}>
+                    <TicketLink ticketId={t.id} className="min-w-0 flex-1 truncate hover:text-primary" onClick={() => onOpenChange(false)}>
                       {t.label}
-                    </Link>
+                    </TicketLink>
                     {canWrite && (
                       <button type="button" className="cursor-pointer rounded p-0.5 text-muted hover:text-danger" onClick={() => setTickets((ts) => ts.filter((x) => x.id !== t.id))} aria-label="Remove ticket">
                         <X className="size-3.5" />

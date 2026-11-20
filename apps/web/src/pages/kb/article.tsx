@@ -14,6 +14,7 @@ import { ConfirmDialog } from '@/components/ui/overlays';
 import { Markdown } from '@/components/kb/markdown';
 import { Attachments } from '@/pages/tickets/detail';
 import { handleFormError } from '@/components/form';
+import { TicketLink } from '@/lib/open-ticket';
 
 export interface Article {
   id: number;
@@ -142,9 +143,9 @@ export default function ArticlePage() {
                 <ul className="space-y-1.5 text-[13px]">
                   {a.tickets.map((t) => (
                     <li key={t.id}>
-                      <Link to={`/tickets/${t.id}`} className="hover:text-primary">
+                      <TicketLink ticketId={t.id} className="hover:text-primary">
                         <span className="font-mono text-xs text-muted">{t.ticketNumber}</span> {t.title}
-                      </Link>
+                      </TicketLink>
                     </li>
                   ))}
                 </ul>

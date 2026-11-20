@@ -15,6 +15,7 @@ import { Dialog } from '@/components/ui/overlays';
 import { DataTable, type Column } from '@/components/data-table';
 import { FormField, FormGrid, handleFormError } from '@/components/form';
 import { EntityPicker } from '@/components/entity-picker';
+import { TicketLink } from '@/lib/open-ticket';
 
 interface Recurring {
   id: number;
@@ -70,9 +71,9 @@ export default function RecurringTicketsPage() {
       header: 'Last ticket',
       cell: ({ row }) =>
         row.original.lastTicketId ? (
-          <Link to={`/tickets/${row.original.lastTicketId}`} onClick={(e) => e.stopPropagation()} className="font-mono text-xs hover:text-primary">
+          <TicketLink ticketId={row.original.lastTicketId} onClick={(e) => e.stopPropagation()} className="font-mono text-xs hover:text-primary">
             {row.original.lastTicketNumber}
-          </Link>
+          </TicketLink>
         ) : (
           '—'
         ),

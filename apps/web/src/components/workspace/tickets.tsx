@@ -11,6 +11,7 @@ import { PriorityBadge, SlaBadge, StatusBadge, type SlaState } from '@/component
 import { Avatar } from '@/components/ui/misc';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/overlays';
+import { TicketLink } from '@/lib/open-ticket';
 
 /** Row shape returned by GET /tickets. */
 export interface TicketRow {
@@ -55,10 +56,10 @@ export const ticketCols = {
     meta: { sortKey: 'ticketNumber' },
     cell: ({ row }) => (
       <div className="min-w-0 max-w-[28rem]">
-        <Link to={`/tickets/${row.original.id}`} onClick={stop} className="block truncate font-medium hover:text-primary">
+        <TicketLink ticketId={row.original.id} onClick={stop} className="block truncate font-medium hover:text-primary">
           <span className="mr-1.5 font-mono text-xs text-muted">{row.original.ticketNumber}</span>
           {row.original.title}
-        </Link>
+        </TicketLink>
       </div>
     ),
   } as Column<TicketRow>,

@@ -17,6 +17,7 @@ import { FormField, FormGrid, handleFormError } from '@/components/form';
 import { DataTable, type Column } from '@/components/data-table';
 import { EntityPicker } from '@/components/entity-picker';
 import { freshnessTone, safeHref, severityTone, type AtlasEntity } from '@/components/atlas-panel';
+import { TicketLink } from '@/lib/open-ticket';
 
 interface Token {
   id: number;
@@ -348,9 +349,9 @@ function Incidents() {
       header: 'Ticket',
       cell: ({ row }) =>
         row.original.ticket ? (
-          <Link to={`/tickets/${row.original.ticket.id}`} className="hover:text-primary">
+          <TicketLink ticketId={row.original.ticket.id} className="hover:text-primary">
             {row.original.ticket.number} <span className="text-xs text-muted">{row.original.ticket.status}{row.original.ticket.assignee ? ` · ${row.original.ticket.assignee}` : ''}</span>
-          </Link>
+          </TicketLink>
         ) : (
           <span className="text-subtle">none</span>
         ),

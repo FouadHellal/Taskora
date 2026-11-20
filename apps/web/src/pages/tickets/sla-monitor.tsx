@@ -13,6 +13,7 @@ import { BarList, Progress } from '@/components/charts';
 import { Card, CardHeader, EmptyState, Skeleton, Stat } from '@/components/ui/misc';
 import { AssignToMeButton, ticketCols, type TicketRow } from '@/components/workspace/tickets';
 import { defaultRange } from '@/components/insights/filters';
+import { useOpenTicket } from '@/lib/open-ticket';
 
 interface Counts {
   mine: number;
@@ -43,6 +44,7 @@ const complianceTone = (pct: number) => (pct >= 95 ? 'var(--success)' : pct >= 8
 
 export default function SlaMonitorPage() {
   const navigate = useNavigate();
+  const openTicket = useOpenTicket();
   const { can } = useAuth();
   const lookups = useLookups();
   const t = useTableState({ sort: 'dueAt', order: 'asc', filters: { tab: 'breached' } });
@@ -158,7 +160,7 @@ export default function SlaMonitorPage() {
             sort={t.sortState}
             onSortChange={t.setSort}
             onPageChange={t.setPage}
-            onRowClick={(r) => navigate(`/tickets/${r.id}`)}
+            onRowClick={(r, e) => openTicket(r.id, e)}
             empty={
               <EmptyState
                 icon={<ShieldCheck />}

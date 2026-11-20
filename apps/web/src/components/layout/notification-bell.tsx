@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useOpenLink } from '@/lib/open-ticket';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, CheckCheck } from 'lucide-react';
 import { api, type Paginated } from '@/lib/api';
@@ -19,6 +20,7 @@ export interface NotificationRow {
 export function NotificationBell() {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const openLink = useOpenLink();
   const count = useQuery({ queryKey: ['notifications', 'count'], queryFn: () => api.get<{ unread: number }>('/notifications/unread-count'), refetchInterval: 30_000 });
   const list = useQuery({ queryKey: ['notifications', 'recent'], queryFn: () => api.get<Paginated<NotificationRow>>('/notifications', { pageSize: 12 }), enabled: false });
   const markAll = useMutation({
@@ -28,7 +30,7 @@ export function NotificationBell() {
   const open = async (n: NotificationRow) => {
     if (!n.readAt) await api.post(`/notifications/${n.id}/read`);
     qc.invalidateQueries({ queryKey: ['notifications'] });
-    if (n.link) navigate(n.link);
+    if (n.link) openLink(n.link);
   };
   const unread = count.data?.unread ?? 0;
   return (

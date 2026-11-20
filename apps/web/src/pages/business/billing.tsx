@@ -18,6 +18,7 @@ import { Badge, EmptyState, Stat } from '@/components/ui/misc';
 import { ConfirmDialog, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/overlays';
 import { useMoney, useTabParam } from '@/components/business/common';
 import { ExpenseDialog, InvoiceDraftDialog } from '@/components/business/billing-dialogs';
+import { TicketLink } from '@/lib/open-ticket';
 
 interface ReviewRow {
   companyId: number;
@@ -222,9 +223,9 @@ function ExpensesTab() {
       header: 'Ticket',
       cell: ({ row }) =>
         row.original.ticketId ? (
-          <Link to={`/tickets/${row.original.ticketId}`} className="text-primary hover:underline">
+          <TicketLink ticketId={row.original.ticketId} className="text-primary hover:underline">
             {row.original.ticketNumber}
-          </Link>
+          </TicketLink>
         ) : (
           <span className="text-subtle">—</span>
         ),

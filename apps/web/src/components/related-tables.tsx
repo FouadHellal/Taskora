@@ -9,10 +9,12 @@ import { Badge } from './ui/misc';
 import { Progress } from './charts';
 import { ticketColumns, type TicketRow } from '@/pages/tickets/list';
 import { useState } from 'react';
+import { useOpenTicket } from '@/lib/open-ticket';
 
 /** Embedded ticket list filtered by e.g. companyId / contactId / configurationItemId. */
 export function RelatedTickets({ filter, scope = 'open' }: { filter: Record<string, string | number>; scope?: 'open' | 'all' }) {
   const navigate = useNavigate();
+  const openTicket = useOpenTicket();
   const [page, setPage] = useState(1);
   const [state, setState] = useState(scope);
   const q = useQuery({
@@ -43,7 +45,7 @@ export function RelatedTickets({ filter, scope = 'open' }: { filter: Record<stri
         pageSize={25}
         loading={q.isLoading}
         onPageChange={setPage}
-        onRowClick={(r) => navigate(`/tickets/${r.id}`)}
+        onRowClick={(r, e) => openTicket(r.id, e)}
       />
     </div>
   );

@@ -13,6 +13,7 @@ import { Dialog } from '../ui/overlays';
 import { FormField, FormGrid, handleFormError } from '../form';
 import { EntityPicker } from '../entity-picker';
 import type { TimeEntryRow } from './related-lists';
+import { TicketLink } from '@/lib/open-ticket';
 
 interface FormValues {
   target: 'ticket' | 'task';
@@ -143,9 +144,9 @@ export function TimeEntryDialog({
           <div className="rounded-md border border-border bg-surface-2 px-3 py-2 text-[13px]">
             <div className="text-[11px] font-medium uppercase tracking-wide text-subtle">Logged against</div>
             {entry.ticketId ? (
-              <Link to={`/tickets/${entry.ticketId}`} className="text-primary hover:underline">
+              <TicketLink ticketId={entry.ticketId} className="text-primary hover:underline">
                 {entry.ticketNumber} {entry.ticketTitle}
-              </Link>
+              </TicketLink>
             ) : (
               <Link to={`/projects/${entry.projectId}`} className="text-primary hover:underline">
                 {entry.taskTitle} · {entry.projectName}

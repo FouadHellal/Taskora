@@ -21,6 +21,7 @@ import { RelatedTickets } from '@/components/related-tables';
 import { EntityPicker } from '@/components/entity-picker';
 import { Attachments } from '@/pages/tickets/detail';
 import { handleFormError } from '@/components/form';
+import { TicketLink } from '@/lib/open-ticket';
 
 interface CiDetail extends CiRecord {
   ciNumber: string;
@@ -418,9 +419,9 @@ function CiActivity({ ciId }: { ciId: number }) {
         <li key={`${a.kind}-${a.id}`} className="flex items-center gap-2 text-[13px]">
           <Badge tone={a.kind === 'ticket' ? 'primary' : 'neutral'}>{a.kind === 'ticket' ? 'Ticket' : a.subtype}</Badge>
           {a.kind === 'ticket' ? (
-            <Link to={`/tickets/${a.id}`} className="flex-1 truncate hover:text-primary">
+            <TicketLink ticketId={a.id} className="flex-1 truncate hover:text-primary">
               {a.title}
-            </Link>
+            </TicketLink>
           ) : (
             <span className="flex-1 truncate">{a.title}</span>
           )}

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useOpenLink } from '@/lib/open-ticket';
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Bell, BellOff, CalendarDays, Check, CheckCheck, ChevronLeft, ChevronRight, ExternalLink, ListTodo, MessageSquare, Ticket, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,7 +37,7 @@ function dayLabel(iso: string) {
 
 export default function NotificationsPage() {
   const qc = useQueryClient();
-  const navigate = useNavigate();
+  const openLink = useOpenLink();
   const t = useTableState({ pageSize: 30 });
   const unreadOnly = t.filters.unread === 'true';
   const list = useQuery({
@@ -62,7 +62,7 @@ export default function NotificationsPage() {
 
   const open = async (n: NotificationRow) => {
     if (!n.readAt) markRead.mutate(n.id);
-    if (n.link) navigate(n.link);
+    if (n.link) openLink(n.link);
   };
 
   const rows = list.data?.data ?? [];
