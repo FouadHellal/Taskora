@@ -20,6 +20,7 @@ import { slaEventState } from '../../lib/business-time.js';
 import { getSystemSettings } from '../../lib/settings.js';
 import { addTicketNote, createTicket, getTicketRow, updateTicket, type TicketRow } from './service.js';
 import { runTicketRules } from '../automation/engine.js';
+import { emitTicketEvent } from '../../lib/webhooks.js';
 import { enqueue } from '../../jobs/queue.js';
 
 const assignee = alias(s.users, 'assignee');
@@ -540,6 +541,7 @@ export async function ticketRoutes(app: FastifyInstance) {
       await enqueue(app.db, 'email.customer_note', { noteId: note.id }, { maxAttempts: 3 });
     }
     if (input.statusId && input.statusId !== before.statusId) await runTicketRules(app.db, 'ticket.updated', id);
+    await emitTicketEvent(app.db, 'ticket.note_added', id, { note: { id: note.id, body: note.body, visibility: note.visibility, authorId: me.id, createdAt: note.createdAt } });
     return reply.status(201).send(note);
   });
 

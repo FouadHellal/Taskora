@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { and, eq, gt, lt } from 'drizzle-orm';
 import { hasPermission, type Permission } from '@taskora/shared';
-import { integrationTokens, roles, sessions, users } from '../../db/schema/index.js';
+import { apiKeys, integrationTokens, roles, sessions, users } from '../../db/schema/index.js';
 import { randomToken, sha256 } from '../../lib/crypto.js';
 import { forbidden, unauthorized } from '../../lib/errors.js';
 import type { AuthUser } from '../../lib/context.js';
@@ -44,6 +44,25 @@ export async function destroySession(app: FastifyInstance, req: FastifyRequest, 
 }
 
 const TOKEN_RE = /^Bearer (tki_[A-Za-z0-9_-]{32,128})$/;
+const API_KEY_RE = /^Bearer (tka_[A-Za-z0-9_-]{32,128})$/;
+
+/**
+ * Personal API key (Settings → API & Webhooks): the request acts as the key's owner with the
+ * owner's role permissions. Used by n8n, scripts and other automation; no CSRF token needed.
+ */
+async function authenticateApiKey(db: Db, req: FastifyRequest): Promise<AuthUser | null> {
+  const m = API_KEY_RE.exec(String(req.headers.authorization ?? ''));
+  if (!m) return null;
+  const [row] = await db.select().from(apiKeys).where(eq(apiKeys.tokenHash, sha256(m[1]!)));
+  const now = new Date();
+  if (!row || row.revokedAt || (row.expiresAt && row.expiresAt <= now)) throw unauthorized('Invalid or expired API key');
+  const user = await loadAuthUser(db, row.userId);
+  if (!user) throw unauthorized('Invalid or expired API key');
+  if (!row.lastUsedAt || now.getTime() - row.lastUsedAt.getTime() > 60_000) {
+    await db.update(apiKeys).set({ lastUsedAt: now, lastUsedIp: req.ip }).where(eq(apiKeys.id, row.id));
+  }
+  return user;
+}
 
 /**
  * Integration token check (docs/integrations/atlas.md): hashed lookup, not revoked or expired,
@@ -133,6 +152,15 @@ export function registerAuthHook(app: FastifyInstance) {
       }
     }
 
+    let viaApiKey = false;
+    if (!req.user && typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer tka_')) {
+      const user = await authenticateApiKey(app.db, req);
+      if (user) {
+        req.user = user;
+        viaApiKey = true;
+      }
+    }
+
     if (Date.now() - lastCleanup > 3600_000) {
       lastCleanup = Date.now();
       await app.db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
@@ -142,7 +170,7 @@ export function registerAuthHook(app: FastifyInstance) {
     if (!req.user) throw unauthorized();
 
     // CSRF: cookie-authenticated state-changing requests must echo the session's token.
-    if (!SAFE_METHODS.has(req.method)) {
+    if (!SAFE_METHODS.has(req.method) && !viaApiKey) {
       const header = req.headers['x-csrf-token'];
       if (typeof header !== 'string' || header !== req.csrfToken) {
         throw forbidden('Missing or invalid CSRF token');

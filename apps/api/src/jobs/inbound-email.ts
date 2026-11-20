@@ -14,6 +14,7 @@ import type { Config } from '../config.js';
 import type { Db, Tx } from '../db/client.js';
 import * as s from '../db/schema/index.js';
 import { getSystemSettings } from '../lib/settings.js';
+import { resolveImap } from '../lib/imap-settings.js';
 import { addTicketNote, createTicket, getTicketRow, updateTicket } from '../modules/tickets/service.js';
 import { runTicketRules } from '../modules/automation/engine.js';
 
@@ -157,17 +158,18 @@ export async function processInboundEmail(db: Db, config: Config, msg: InboundMe
 
 /** Polls the configured IMAP mailbox and processes unseen messages. */
 export async function pollInbox(db: Db, config: Config, log: (msg: string) => void = () => {}) {
-  if (!imapConfigured(config)) return { processed: 0 };
+  const imap = await resolveImap(db, config);
+  if (!imap) return { processed: 0 };
   const client = new ImapFlow({
-    host: config.IMAP_HOST!,
-    port: config.IMAP_PORT,
-    secure: config.IMAP_SECURE,
-    auth: { user: config.IMAP_USER!, pass: config.IMAP_PASSWORD! },
+    host: imap.host,
+    port: imap.port,
+    secure: imap.secure,
+    auth: { user: imap.user, pass: imap.password },
     logger: false,
   });
   await client.connect();
   let processed = 0;
-  const lock = await client.getMailboxLock(config.IMAP_MAILBOX);
+  const lock = await client.getMailboxLock(imap.mailbox);
   try {
     const uids = (await client.search({ seen: false }, { uid: true })) || [];
     for (const uid of uids.slice(0, 25)) {

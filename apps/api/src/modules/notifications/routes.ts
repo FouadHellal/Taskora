@@ -5,6 +5,7 @@ import { idOf } from '../../lib/params.js';
 import { countAll, paginated, parseList, whereAll } from '../../lib/query.js';
 import { currentUser } from '../../lib/context.js';
 import { resolveSmtp } from '../../lib/mail.js';
+import { resolveImap } from '../../lib/imap-settings.js';
 
 export async function notificationRoutes(app: FastifyInstance) {
   /** Inbound e-mail processing log (administrators). */
@@ -17,7 +18,7 @@ export async function notificationRoutes(app: FastifyInstance) {
       .limit(q.pageSize)
       .offset((q.page - 1) * q.pageSize);
     const [{ n }] = (await app.db.select({ n: countAll }).from(s.inboundEmails)) as [{ n: number }];
-    return { ...paginated(rows, n, q), imapConfigured: !!(app.config.IMAP_HOST && app.config.IMAP_USER), smtpConfigured: !!(await resolveSmtp(app.db, app.config)) };
+    return { ...paginated(rows, n, q), imapConfigured: !!(await resolveImap(app.db, app.config)), smtpConfigured: !!(await resolveSmtp(app.db, app.config)) };
   });
 
   app.get('/notifications', async (req) => {

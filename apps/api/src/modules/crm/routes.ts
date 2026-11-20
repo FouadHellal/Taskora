@@ -9,6 +9,7 @@ import { idOf } from '../../lib/params.js';
 import { boolParam, countAll, intParam, orderFrom, paginated, parseList, searchAny, whereAll } from '../../lib/query.js';
 import { validateCustomFields } from '../../lib/custom-fields.js';
 import { currentUser } from '../../lib/context.js';
+import { emitEvent } from '../../lib/webhooks.js';
 import type { Tx } from '../../db/client.js';
 
 const openTicketCond = sql`${s.tickets.statusId} in (select id from ticket_statuses where category not in ('resolved','closed'))`;
@@ -177,6 +178,7 @@ export async function crmRoutes(app: FastifyInstance) {
       await audit(tx, req, { action: 'create', entityType: 'company', entityId: row!.id, summary: row!.name });
       return row!;
     });
+    await emitEvent(app.db, 'company.created', { company: created });
     return reply.status(201).send(created);
   });
 
@@ -339,6 +341,7 @@ export async function crmRoutes(app: FastifyInstance) {
       await audit(tx, req, { action: 'create', entityType: 'contact', entityId: r!.id, summary: `${r!.firstName} ${r!.lastName}` });
       return publicContact(r!);
     });
+    await emitEvent(app.db, 'contact.created', { contact: row });
     return reply.status(201).send(row);
   });
 

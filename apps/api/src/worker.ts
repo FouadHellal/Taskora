@@ -21,7 +21,9 @@ import { dispatchNotificationEmails, expireStaleEmails, sendCustomerNote } from 
 import { resolveSmtp } from './lib/mail.js';
 import { autoBackupDue, pruneAutoBackups, saveBackup } from './lib/backup.js';
 import { getSystemSettings } from './lib/settings.js';
-import { imapConfigured, pollInbox } from './jobs/inbound-email.js';
+import { pollInbox } from './jobs/inbound-email.js';
+import { resolveImap } from './lib/imap-settings.js';
+import { deliverWebhook } from './lib/webhooks.js';
 
 const config = loadConfig();
 const log = pino({ level: config.LOG_LEVEL, base: { svc: 'worker' } });
@@ -43,6 +45,7 @@ const handlers: Record<string, Handler> = {
   'email.dispatch': (db, cfg) => dispatchNotificationEmails(db, cfg),
   'email.customer_note': (db, cfg, job) => sendCustomerNote(db, cfg, Number(job.payload.noteId)),
   'email.inbound': (db, cfg) => pollInbox(db, cfg, (m) => log.info({ job: 'email.inbound' }, m)),
+  'webhook.deliver': (db, cfg, job) => deliverWebhook(db, cfg, job.payload),
   'backup.auto': async (db, cfg) => {
     const settings = await getSystemSettings(db);
     const saved = await saveBackup(db, cfg, 'auto');
@@ -68,7 +71,7 @@ async function schedule(db: Db) {
   if (settings.autoBackupEnabled && (await autoBackupDue(config, settings.autoBackupIntervalHours))) {
     await enqueue(db, 'backup.auto', {}, { dedupeKey: 'backup.auto', maxAttempts: 2 });
   }
-  if (imapConfigured(config)) await enqueue(db, 'email.inbound', {}, { dedupeKey: 'email.inbound', maxAttempts: 1 });
+  if (await resolveImap(db, config)) await enqueue(db, 'email.inbound', {}, { dedupeKey: 'email.inbound', maxAttempts: 1 });
   const [a1] = await db
     .select()
     .from(integrations)

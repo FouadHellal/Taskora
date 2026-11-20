@@ -24,6 +24,7 @@ import { portalAdminRoutes } from './portal/routes.js';
 import { backupRoutes } from './backup/routes.js';
 import { logoRoutes } from './logos/routes.js';
 import { emailRoutes } from './email/routes.js';
+import { developerRoutes } from './developer/routes.js';
 
 export async function registerModules(app: FastifyInstance) {
   await app.register(settingsRoutes);
@@ -51,4 +52,5 @@ export async function registerModules(app: FastifyInstance) {
   await app.register(backupRoutes);
   await app.register(logoRoutes);
   await app.register(emailRoutes);
+  await app.register(developerRoutes);
 }

@@ -3,6 +3,7 @@ import type { WorkflowAction, WorkflowCondition, WorkflowTrigger } from '@taskor
 import type { Db, Tx } from '../../db/client.js';
 import * as s from '../../db/schema/index.js';
 import { addTicketNote, getTicketRow, updateTicket, type TicketRow } from '../tickets/service.js';
+import { emitTicketEvent } from '../../lib/webhooks.js';
 import { notify } from '../notifications/service.js';
 
 export function matchesConditions(ticket: Record<string, unknown>, conditions: WorkflowCondition[]): boolean {
@@ -89,6 +90,9 @@ export async function runTicketRules(
   ticketId: number,
   opts: { dedupeKey?: string; ruleIds?: number[] } = {},
 ): Promise<number> {
+  if (!opts.ruleIds && (trigger === 'ticket.created' || trigger === 'ticket.updated' || trigger === 'ticket.sla_breached')) {
+    await emitTicketEvent(db, trigger, ticketId);
+  }
   const rules = await db
     .select()
     .from(s.workflowRules)

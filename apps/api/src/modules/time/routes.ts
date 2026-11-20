@@ -10,6 +10,7 @@ import { boolParam, countAll, idList, intParam, paginated, parseList, searchAny,
 import { can, currentUser } from '../../lib/context.js';
 import { getSystemSettings } from '../../lib/settings.js';
 import { toCsv } from '../tickets/routes.js';
+import { emitEvent } from '../../lib/webhooks.js';
 import { classifyTime, resolveTimeContext, roundMinutes } from './service.js';
 
 const LOCKED = new Set(['approved', 'billed']);
@@ -154,6 +155,7 @@ export async function timeRoutes(app: FastifyInstance) {
       await audit(tx, req, { action: 'create', entityType: 'time_entry', entityId: r!.id, summary: `${duration} min` });
       return r!;
     });
+    await emitEvent(app.db, 'time_entry.created', { timeEntry: row });
     return reply.status(201).send(row);
   });
 
