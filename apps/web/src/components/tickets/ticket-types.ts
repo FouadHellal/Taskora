@@ -70,6 +70,21 @@ export interface TicketDetail {
   sla: { firstResponse: SlaState; resolution: SlaState; overall: SlaState };
 }
 
+/** A time entry as listed in the ticket timeline. */
+export interface TicketTimeEntry {
+  id: number;
+  userId: number;
+  startedAt: string;
+  durationMinutes: number;
+  description: string;
+  internalNotes: string | null;
+  billable: boolean;
+  workTypeId: number | null;
+  workTypeName: string | null;
+  status: string;
+  contractCovered: boolean;
+}
+
 export type TimelineItem =
   | { kind: 'note'; id: string; at: string; userName: string | null; note: { id: number; body: string; visibility: 'internal' | 'public'; kind: string; userId: number | null; createdAt: string } }
   | { kind: 'event'; id: string; at: string; userName: string | null; event: { id: number; type: string; data: Record<string, unknown>; createdAt: string } }
@@ -78,6 +93,6 @@ export type TimelineItem =
       id: string;
       at: string;
       userName: string | null;
-      entry: { id: number; durationMinutes: number; description: string; billable: boolean; workTypeName: string | null; status: string; contractCovered: boolean };
+      entry: TicketTimeEntry;
     }
   | { kind: 'attachment'; id: string; at: string; userName: string | null; file: { id: number; fileName: string; sizeBytes: number; mimeType: string } };

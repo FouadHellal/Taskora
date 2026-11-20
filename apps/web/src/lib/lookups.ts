@@ -51,6 +51,8 @@ export interface CustomFieldDef {
   isRequired: boolean;
   isActive: boolean;
   helpText: string | null;
+  /** Fields sharing a tab name are shown together on their own tab (tickets). */
+  tab?: string | null;
 }
 
 export interface Lookups {

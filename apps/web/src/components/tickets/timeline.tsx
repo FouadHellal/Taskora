@@ -8,9 +8,10 @@ import { useMe } from '@/lib/auth';
 import { cn, fmtDateTime, fmtRelative } from '@/lib/utils';
 import { Avatar, Badge } from '../ui/misc';
 import { Button } from '../ui/button';
-import { Textarea } from '../ui/input';
 import { Tooltip } from '../ui/overlays';
 import type { TimelineItem } from './ticket-types';
+import { NoteBody } from './note-body';
+import { ImageTextarea } from './image-paste';
 
 const FIELD_LABELS: Record<string, string> = {
   title: 'title',
@@ -125,7 +126,7 @@ export function Timeline({ ticketId, items, filter }: { ticketId: number; items:
                     {fmtRelative(item.at)}
                   </span>
                 </div>
-                <p className="prose-note mt-1 text-[13px]">{item.entry.description}</p>
+                <NoteBody text={item.entry.description} className="mt-1 text-[13px]" />
               </div>
             </div>
           ) : (
@@ -140,6 +141,23 @@ export function Timeline({ ticketId, items, filter }: { ticketId: number; items:
               <span className="ml-auto text-[11px] text-subtle">{fmtRelative(item.at)}</span>
             </div>
           )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+type NoteTimelineItem = Extract<TimelineItem, { kind: 'note' }>;
+
+/** Notes only, newest first (the timeline is already sorted that way). */
+export function NotesList({ ticketId, items, visibility = 'all' }: { ticketId: number; items: TimelineItem[]; visibility?: 'all' | 'internal' | 'public' }) {
+  const notes = items.filter((i): i is NoteTimelineItem => i.kind === 'note' && (visibility === 'all' || i.note.visibility === visibility));
+  if (!notes.length) return <p className="py-8 text-center text-xs text-muted">No notes yet.</p>;
+  return (
+    <ol className="space-y-3">
+      {notes.map((item) => (
+        <li key={item.id} className="relative pl-8">
+          <NoteItem ticketId={ticketId} item={item} />
         </li>
       ))}
     </ol>
@@ -168,6 +186,7 @@ function NoteItem({ ticketId, item }: { ticketId: number; item: Extract<Timeline
   const qc = useQueryClient();
   const [editing, setEditing] = useState(false);
   const [body, setBody] = useState(item.note.body);
+  const [busy, setBusy] = useState(false);
   const isPublic = item.note.visibility === 'public';
   const canEdit = item.note.userId === me.user.id;
   const save = useMutation({
@@ -223,9 +242,9 @@ function NoteItem({ ticketId, item }: { ticketId: number; item: Extract<Timeline
         </div>
         {editing ? (
           <div className="space-y-2">
-            <Textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} />
+            <ImageTextarea ticketId={ticketId} value={body} onValueChange={setBody} onBusyChange={setBusy} rows={4} />
             <div className="flex gap-2">
-              <Button size="sm" variant="primary" loading={save.isPending} onClick={() => save.mutate({ body })}>
+              <Button size="sm" variant="primary" loading={save.isPending} disabled={busy || !body.trim()} onClick={() => save.mutate({ body })}>
                 Save
               </Button>
               <Button size="sm" onClick={() => setEditing(false)}>
@@ -234,7 +253,7 @@ function NoteItem({ ticketId, item }: { ticketId: number; item: Extract<Timeline
             </div>
           </div>
         ) : (
-          <p className="prose-note text-[13px]">{item.note.body}</p>
+          <NoteBody text={item.note.body} className="text-[13px]" />
         )}
       </div>
     </div>
