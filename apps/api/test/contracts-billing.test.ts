@@ -353,6 +353,7 @@ describe('invoices', () => {
 
   it('uses the default tax rate, refuses empty drafts without consuming a number, and locks issued invoices', async () => {
     await saveSystemSettings(ctx.db, { defaultTaxRate: 21 });
+    expect((await admin.get('/api/v1/billing/defaults')).body.defaultTaxRate).toBe(21);
     const co = await makeCompany(admin, 'Tax Co');
     const seq = async () => (await ctx.db.select().from(schema.sequences).where(eq(schema.sequences.name, 'invoice')))[0]?.value ?? 0;
     const before = await seq();

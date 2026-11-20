@@ -33,6 +33,8 @@ interface ContractRow {
   billingPeriod: string;
   usedMinutes: number;
   purchasedHours: number;
+  remainingHours: number;
+  lowBalance: boolean;
 }
 
 function daysUntil(date: string | null) {
@@ -112,9 +114,11 @@ export default function ContractsPage() {
             <div className="w-36">
               <div className="flex justify-between text-[11px] tabular-nums">
                 <span>{used.toFixed(1)} h</span>
-                <span className="text-muted">/ {c.purchasedHours} h</span>
+                <span className={c.lowBalance ? 'font-medium text-danger' : 'text-muted'} title={`${c.remainingHours} h remaining`}>
+                  {c.lowBalance ? `${c.remainingHours} h left` : `/ ${c.purchasedHours} h`}
+                </span>
               </div>
-              <Progress value={pct} tone={pct >= 100 ? 'danger' : pct >= 80 ? 'warning' : 'primary'} className="mt-0.5" />
+              <Progress value={pct} tone={c.lowBalance || pct >= 100 ? 'danger' : pct >= 80 ? 'warning' : 'primary'} className="mt-0.5" />
             </div>
           );
         }
