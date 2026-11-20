@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { ChevronsLeft, ChevronsRight, Laptop, LogOut, Mail, Menu, Moon, Plus, Search, Sun, Monitor, KeyRound, Keyboard, X } from 'lucide-react';
+import { ChevronsLeft, ChevronsRight, CircleHelp, Laptop, LogOut, Mail, Menu, Moon, Plus, Search, Settings, Sun, Monitor, KeyRound, Keyboard, X } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useAuth, useMe } from '@/lib/auth';
 import { cn } from '@/lib/utils';
@@ -139,6 +139,14 @@ export function AppShell() {
               </Button>
             )}
             {can('time.write') && <TimerWidget />}
+            {!narrow && (
+              <Button variant="ghost" size="icon" onClick={() => navigate('/help')} aria-label="Help & guides" title="Help & guides">
+                <CircleHelp />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={() => navigate('/settings')} aria-label="Settings" title="Settings">
+              <Settings />
+            </Button>
             <NotificationBell />
             <DropdownMenu>
               <DropdownTrigger asChild>

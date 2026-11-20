@@ -7,6 +7,7 @@ import {
   Briefcase,
   Building2,
   Calendar,
+  CircleHelp,
   CalendarClock,
   CalendarRange,
   ClipboardList,
@@ -41,6 +42,7 @@ import {
   Receipt,
   Repeat,
   ScrollText,
+  Settings,
   Settings2,
   Shapes,
   ShieldCheck,
@@ -93,6 +95,7 @@ export const NAV: NavSection[] = [
       { label: 'My Work', to: '/my-work', icon: ListTodo },
       { label: 'Calendar', to: '/calendar', icon: Calendar },
       { label: 'Notifications', to: '/notifications', icon: Bell },
+      { label: 'Help & Guides', to: '/help', icon: CircleHelp },
     ],
   },
   {
@@ -201,6 +204,7 @@ export const NAV: NavSection[] = [
     label: 'Administration',
     icon: Settings2,
     items: [
+      { label: 'Settings', to: '/settings', icon: Settings, end: false },
       {
         label: 'People & Access',
         icon: Users,

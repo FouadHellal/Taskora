@@ -67,6 +67,8 @@ const AdminAudit = page(() => import('./pages/admin/audit'));
 const AdminImport = page(() => import('./pages/admin/import'));
 const AdminEmail = page(() => import('./pages/admin/email'));
 const AdminBackups = page(() => import('./pages/admin/backups'));
+const SettingsHub = page(() => import('./pages/settings/index'));
+const Help = page(() => import('./pages/help/index'));
 
 function Guard({ perm, children }: { perm?: Permission; children: ReactNode }) {
   const { can } = useAuth();
@@ -175,6 +177,9 @@ export function App() {
         {r('/admin/import', AdminImport, 'companies.write')}
         {r('/admin/email', AdminEmail, 'settings.manage')}
         {r('/admin/backups', AdminBackups, 'backups.manage')}
+        {r('/settings', SettingsHub)}
+        {r('/help', Help)}
+        {r('/help/:slug', Help)}
         <Route path="*" element={<EmptyState title="Page not found" description="The page you are looking for does not exist." />} />
       </Route>
     </Routes>
