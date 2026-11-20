@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { endOfMonth, format, startOfMonth, subMonths } from 'date-fns';
-import { Banknote, FilePlus2, Plus, Receipt, Trash2 } from 'lucide-react';
+import { Banknote, Eye, FilePlus2, Plus, Receipt, Trash2 } from 'lucide-react';
 import { formatMinutes } from '@taskora/shared';
 import { api, type Paginated } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Stat } from '@/components/ui/misc';
 import { ConfirmDialog, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/overlays';
 import { useMoney, useTabParam } from '@/components/business/common';
-import { ExpenseDialog, InvoiceDraftDialog } from '@/components/business/billing-dialogs';
+import { BillingPreviewDialog, ExpenseDialog, InvoiceDraftDialog } from '@/components/business/billing-dialogs';
 
 interface ReviewRow {
   companyId: number;
@@ -78,6 +78,8 @@ function ReviewTab() {
   const [from, setFrom] = useState(ymd(startOfMonth(now)));
   const [to, setTo] = useState(ymd(endOfMonth(now)));
   const [draftFor, setDraftFor] = useState<{ id: number; name: string } | null | 'new'>(null);
+  const [previewFor, setPreviewFor] = useState<{ id: number; name: string } | null | 'new'>(null);
+  const [draftPeriod, setDraftPeriod] = useState<{ from: string; to: string } | null>(null);
   const review = useQuery({
     queryKey: ['billing-review', from, to],
     queryFn: () => api.get<{ data: ReviewRow[] }>('/billing/review', { from, to }),
@@ -123,13 +125,19 @@ function ReviewTab() {
     {
       id: 'actions',
       header: '',
-      meta: { className: 'w-44 text-right' },
-      cell: ({ row }) =>
-        can('billing.write') && (
-          <Button size="sm" onClick={() => setDraftFor({ id: row.original.companyId, name: row.original.companyName })}>
-            <FilePlus2 /> Create invoice draft
+      meta: { className: 'w-64 text-right' },
+      cell: ({ row }) => (
+        <div className="flex justify-end gap-1">
+          <Button size="sm" variant="ghost" onClick={() => setPreviewFor({ id: row.original.companyId, name: row.original.companyName })}>
+            <Eye /> Preview
           </Button>
-        ),
+          {can('billing.write') && (
+            <Button size="sm" onClick={() => setDraftFor({ id: row.original.companyId, name: row.original.companyName })}>
+              <FilePlus2 /> Create invoice draft
+            </Button>
+          )}
+        </div>
+      ),
     },
   ];
 
@@ -146,8 +154,11 @@ function ReviewTab() {
         <Button size="sm" variant="ghost" onClick={() => preset(subMonths(now, 1))}>
           Last month
         </Button>
+        <Button size="sm" className="ml-auto" onClick={() => setPreviewFor('new')}>
+          <Eye /> Billing preview
+        </Button>
         {can('billing.write') && (
-          <Button size="sm" variant="primary" className="ml-auto" onClick={() => setDraftFor('new')}>
+          <Button size="sm" variant="primary" onClick={() => setDraftFor('new')}>
             <Plus /> New invoice draft
           </Button>
         )}
@@ -164,15 +175,42 @@ function ReviewTab() {
         columns={columns}
         data={rows}
         loading={review.isLoading}
-        empty={<EmptyState icon={<Banknote />} title="Nothing to bill" description="No unbilled time or expenses in this period. Recurring contract fees can still be invoiced with “New invoice draft”." />}
+        empty={
+          <EmptyState
+            icon={<Banknote />}
+            title="Nothing to bill"
+            description="No unbilled time or expenses in this period. Contract charges (recurring fees, fixed prices, blocks) can be checked with “Billing preview”."
+          />
+        }
       />
       <InvoiceDraftDialog
         open={!!draftFor}
-        onOpenChange={(o) => !o && setDraftFor(null)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setDraftFor(null);
+            setDraftPeriod(null);
+          }
+        }}
         company={draftFor === 'new' ? null : draftFor}
+        periodStart={draftPeriod?.from ?? from}
+        periodEnd={draftPeriod?.to ?? to}
+        onCreated={(inv) => navigate(`/invoices/${inv.id}`)}
+      />
+      <BillingPreviewDialog
+        open={!!previewFor}
+        onOpenChange={(o) => !o && setPreviewFor(null)}
+        company={previewFor === 'new' ? null : previewFor}
         periodStart={from}
         periodEnd={to}
-        onCreated={(inv) => navigate(`/invoices/${inv.id}`)}
+        onCreateDraft={
+          can('billing.write')
+            ? (company, period) => {
+                setPreviewFor(null);
+                setDraftPeriod(period);
+                setDraftFor(company);
+              }
+            : undefined
+        }
       />
     </div>
   );

@@ -175,6 +175,8 @@ export const contracts = pgTable(
     recurringAmount: money('recurring_amount'),
     billingPeriod: text('billing_period').notNull().default('monthly'),
     overageRate: money('overage_rate'),
+    /** Per-ticket contracts: fee billed once for every ticket resolved under the contract. */
+    perTicketRate: money('per_ticket_rate'),
     description: text('description'),
     customFields: customFields(),
     createdAt: createdAt(),
@@ -223,8 +225,24 @@ export const contractServices = pgTable('contract_services', {
   quantity: hours('quantity').notNull().default(1),
   unitPrice: money('unit_price').notNull(),
   startDate: date('start_date', { mode: 'string' }),
+  /** Last day the service is billed (inclusive); null = until the contract ends. */
+  endDate: date('end_date', { mode: 'string' }),
   createdAt: createdAt(),
 });
+
+/** Work types that stay billable on a contract even when the contract would cover the time. */
+export const contractExclusions = pgTable(
+  'contract_exclusions',
+  {
+    contractId: integer('contract_id')
+      .notNull()
+      .references(() => contracts.id, { onDelete: 'cascade' }),
+    workTypeId: integer('work_type_id')
+      .notNull()
+      .references(() => workTypes.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.contractId, t.workTypeId] })],
+);
 
 /* ---------------------------------------------------------------- projects */
 
@@ -581,6 +599,11 @@ export const timeEntries = pgTable(
     billable: boolean('billable').notNull().default(true),
     /** Covered by a fixed-price / recurring / block contract (not billed separately). */
     contractCovered: boolean('contract_covered').notNull().default(false),
+    /**
+     * Minutes of this entry covered by the contract (blocks may cover only part of it).
+     * Null on rows written before block accounting: then fully covered when `contractCovered`.
+     */
+    coveredMinutes: integer('covered_minutes'),
     hourlyRate: money('hourly_rate'),
     description: text('description').notNull(),
     internalNotes: text('internal_notes'),
@@ -651,9 +674,16 @@ export const invoiceLines = pgTable(
     timeEntryId: integer('time_entry_id').references((): AnyPgColumn => timeEntries.id, { onDelete: 'set null' }),
     expenseId: integer('expense_id').references(() => expenses.id, { onDelete: 'set null' }),
     contractServiceId: integer('contract_service_id').references(() => contractServices.id, { onDelete: 'set null' }),
+    /** Contract the line bills (recurring fee, service, fixed price, block, per-ticket fee). */
+    contractId: integer('contract_id').references(() => contracts.id, { onDelete: 'set null' }),
+    /** First day of the billed service period: with contract/service it makes recurring lines idempotent. */
+    servicePeriodStart: date('service_period_start', { mode: 'string' }),
+    contractBlockId: integer('contract_block_id').references(() => contractBlocks.id, { onDelete: 'set null' }),
+    /** Ticket billed by a per-ticket contract fee. */
+    ticketId: integer('ticket_id').references(() => tickets.id, { onDelete: 'set null' }),
     sortOrder: integer('sort_order').notNull().default(0),
   },
-  (t) => [index('invoice_lines_invoice_idx').on(t.invoiceId)],
+  (t) => [index('invoice_lines_invoice_idx').on(t.invoiceId), index('invoice_lines_contract_idx').on(t.contractId)],
 );
 
 /* --------------------------------------------------------------- knowledge */

@@ -15,6 +15,7 @@ import { nextSequence } from '../../lib/query.js';
 import { getSystemSettings, saveSystemSettings } from '../../lib/settings.js';
 import { addTicketNote, createTicket, updateTicket, type TicketCtx } from '../../modules/tickets/service.js';
 import { classifyTime, resolveTimeContext } from '../../modules/time/service.js';
+import { recomputeCoverage } from '../../modules/contracts/coverage.js';
 
 export interface SeedDemoOptions {
   now?: Date;
@@ -2795,7 +2796,7 @@ async function seedInTx(
     const startedAt = new Date(p.end.getTime() - minutes * MIN);
     if (startedAt < thirtyDaysAgo) continue;
     const tc = await resolveTimeContext(tx, p.ticketId ?? null, p.taskId ?? null);
-    const cls = await classifyTime(tx, tc.contractId, p.workTypeId, undefined);
+    const cls = await classifyTime(tx, tc.contractId, p.workTypeId, undefined, { startedAt, durationMinutes: minutes });
     const recent = p.end > addDays(now, -3);
     const approvedAt = recent ? null : new Date(Math.min(addDays(p.end, 1).getTime(), cutoff.getTime()));
     timeValues.push({
@@ -2811,6 +2812,7 @@ async function seedInTx(
       durationMinutes: minutes,
       billable: cls.billable,
       contractCovered: cls.contractCovered,
+      coveredMinutes: cls.coveredMinutes,
       hourlyRate: cls.hourlyRate,
       description: p.description,
       status: recent ? 'submitted' : 'approved',
@@ -2821,6 +2823,8 @@ async function seedInTx(
     });
   }
   if (timeValues.length) await tx.insert(s.timeEntries).values(timeValues);
+  // Block contracts cover only up to the purchased hours.
+  await recomputeCoverage(tx, [...new Set(timeValues.map((t) => t.contractId ?? null))]);
   const emmaTicket = ticketKeys.get('emma-slow');
   if (emmaTicket) {
     await tx.insert(s.activeTimers).values({ userId: U.lucas, ticketId: emmaTicket, description: 'Disk clean-up and post-reboot check', startedAt: new Date(now.getTime() - 25 * MIN) });

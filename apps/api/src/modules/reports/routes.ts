@@ -78,8 +78,8 @@ export async function reportRoutes(app: FastifyInstance) {
 
     const [time] = await rows<Record<string, number>>(sql`
       select coalesce(sum(duration_minutes),0)::int as "minutes",
-             coalesce(sum(duration_minutes) filter (where billable and not contract_covered),0)::int as "billableMinutes",
-             coalesce(sum(duration_minutes) filter (where contract_covered),0)::int as "coveredMinutes"
+             coalesce(sum(duration_minutes - coalesce(covered_minutes, case when contract_covered then duration_minutes else 0 end)) filter (where billable),0)::int as "billableMinutes",
+             coalesce(sum(coalesce(covered_minutes, case when contract_covered then duration_minutes else 0 end)),0)::int as "coveredMinutes"
       from time_entries te where te.started_at between ${from} and ${to} and ${tscope}`);
 
     const [assets] = await rows<Record<string, number>>(sql`
@@ -206,10 +206,10 @@ export async function reportRoutes(app: FastifyInstance) {
     const data = await rows(sql`
       select ${g[0]} as "group",
         round(sum(te.duration_minutes) / 60.0, 2)::float as hours,
-        round(coalesce(sum(te.duration_minutes) filter (where te.billable and not te.contract_covered), 0) / 60.0, 2)::float as "billableHours",
-        round(coalesce(sum(te.duration_minutes) filter (where te.contract_covered), 0) / 60.0, 2)::float as "contractHours",
+        round(coalesce(sum(te.duration_minutes - coalesce(te.covered_minutes, case when te.contract_covered then te.duration_minutes else 0 end)) filter (where te.billable), 0) / 60.0, 2)::float as "billableHours",
+        round(coalesce(sum(coalesce(te.covered_minutes, case when te.contract_covered then te.duration_minutes else 0 end)), 0) / 60.0, 2)::float as "contractHours",
         round(coalesce(sum(te.duration_minutes) filter (where not te.billable), 0) / 60.0, 2)::float as "nonBillableHours",
-        round(coalesce(sum(te.duration_minutes * coalesce(te.hourly_rate, 0) / 60.0) filter (where te.billable and not te.contract_covered), 0), 2)::float as "billableAmount",
+        round(coalesce(sum((te.duration_minutes - coalesce(te.covered_minutes, case when te.contract_covered then te.duration_minutes else 0 end)) * coalesce(te.hourly_rate, 0) / 60.0) filter (where te.billable), 0), 2)::float as "billableAmount",
         count(*)::int as entries
       from time_entries te ${g[1]}
       where te.started_at between ${from} and ${to} and ${timeScope(req, q)}

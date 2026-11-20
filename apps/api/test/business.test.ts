@@ -103,8 +103,8 @@ describe('contracts and billing', () => {
 
     // Billed items are not drafted twice.
     const again = await admin.post('/api/v1/invoices/draft', { companyId: co.id, periodStart: '2026-10-01', periodEnd: '2026-10-31' });
-    expect(again.body.lines).toHaveLength(0);
-    await admin.delete(`/api/v1/invoices/${again.body.id}`);
+    expect(again.status).toBe(422);
+    expect(again.body.error.message).toMatch(/Nothing to bill/);
 
     const issued = await admin.patch(`/api/v1/invoices/${inv.body.id}`, { status: 'issued' });
     expect(issued.body.status).toBe('issued');

@@ -9,6 +9,7 @@ import { getSystemSettings } from '../../lib/settings.js';
 import { validateCustomFields } from '../../lib/custom-fields.js';
 import { notifyFromTemplate } from '../notifications/service.js';
 import { computeDueDates, pausedBusinessMinutes, resolveSlaId } from './sla.js';
+import { reassignTicketTime } from '../time/service.js';
 
 export type TicketRow = typeof s.tickets.$inferSelect;
 type ParsedTicket = z.infer<typeof ticketSchema>;
@@ -312,6 +313,7 @@ export async function updateTicket(
 
   data.lastActivityAt = now;
   const [ticket] = await db.update(s.tickets).set(data).where(eq(s.tickets.id, id)).returning();
+  if (changed.includes('contractId')) await reassignTicketTime(db, id, before.contractId ?? null, data.contractId ?? null);
 
   for (const key of changed) {
     if (key === 'statusId') continue;

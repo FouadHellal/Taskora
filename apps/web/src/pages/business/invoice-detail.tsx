@@ -13,6 +13,7 @@ import { Input, Textarea } from '@/components/ui/input';
 import { Badge, Card, CardBody, CardHeader, EmptyState, Field, PageLoader } from '@/components/ui/misc';
 import { ConfirmDialog } from '@/components/ui/overlays';
 import { handleFormError } from '@/components/form';
+import { LINE_KIND_LABELS } from '@/components/business/billing-dialogs';
 
 interface Line {
   id: number;
@@ -141,7 +142,7 @@ export default function InvoiceDetailPage() {
                 {inv.lines.map((l) => (
                   <tr key={l.id} className="border-t border-border">
                     <td className="px-4 py-1.5">
-                      <Badge>{l.kind}</Badge>
+                      <Badge>{LINE_KIND_LABELS[l.kind] ?? l.kind}</Badge>
                     </td>
                     <td className="px-4 py-1.5">{l.description}</td>
                     <td className="px-4 py-1.5 text-right tabular-nums">{l.quantity}</td>
@@ -212,7 +213,7 @@ export default function InvoiceDetailPage() {
                 <Field label="Issued">{fmtDate(inv.issueDate, '') || null}</Field>
                 <Field label="Due">{fmtDate(inv.dueDate, '') || null}</Field>
               </dl>
-              {write && inv.status !== 'void' ? (
+              {write && draft ? (
                 <Textarea rows={3} defaultValue={inv.notes ?? ''} placeholder="Notes printed on the invoice" onBlur={(e) => e.target.value !== (inv.notes ?? '') && update.mutate({ notes: e.target.value })} />
               ) : (
                 inv.notes && <p className="prose-note text-[13px]">{inv.notes}</p>
