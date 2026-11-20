@@ -500,7 +500,7 @@ export async function ticketRoutes(app: FastifyInstance) {
     return getTicketRow(app.db, id);
   });
 
-  app.delete('/tickets/:id', { config: { perm: 'tickets.delete' } }, async (req) => {
+  app.delete('/tickets/:id', { config: { perm: 'tickets.delete', forceDelete: { table: 'tickets' } } }, async (req) => {
     const id = idOf(req);
     const t = await getTicketRow(app.db, id);
     await app.db.transaction(async (tx) => {

@@ -192,7 +192,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     const id = await saveSla(Number((req.params as { id: string }).id), req.body, req);
     return (await slaWithTargets([id]))[0];
   });
-  app.delete('/settings/sla-policies/:id', { config: { perm: W } }, async (req) => {
+  app.delete('/settings/sla-policies/:id', { config: { perm: W, forceDelete: { table: 'sla_policies', reassign: true } } }, async (req) => {
     const id = Number((req.params as { id: string }).id);
     await app.db.delete(s.slaPolicies).where(eq(s.slaPolicies.id, id));
     await audit(app.db, req, { action: 'delete', entityType: 'sla_policy', entityId: id });

@@ -49,7 +49,7 @@ export async function automationRoutes(app: FastifyInstance) {
     return row;
   });
 
-  app.delete('/workflow-rules/:id', { config: { perm: P } }, async (req) => {
+  app.delete('/workflow-rules/:id', { config: { perm: P, forceDelete: { table: 'workflow_rules' } } }, async (req) => {
     const id = idOf(req);
     const [row] = await app.db.delete(s.workflowRules).where(eq(s.workflowRules.id, id)).returning();
     if (!row) throw notFound('Workflow rule');

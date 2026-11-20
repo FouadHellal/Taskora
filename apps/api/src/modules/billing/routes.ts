@@ -4,7 +4,7 @@ import PDFDocument from 'pdfkit';
 import { expenseSchema, formatMoney, formatNumber, invoiceDraftSchema, invoiceLineSchema, invoiceUpdateSchema } from '@taskora/shared';
 import * as s from '../../db/schema/index.js';
 import { audit } from '../../lib/audit.js';
-import { badRequest, forbidden, notFound } from '../../lib/errors.js';
+import { badRequest, forbidden, notFound, inUse } from '../../lib/errors.js';
 import { idOf } from '../../lib/params.js';
 import { countAll, intParam, nextSequence, paginated, parseList, searchAny, whereAll } from '../../lib/query.js';
 import { can, currentUser } from '../../lib/context.js';
@@ -88,7 +88,7 @@ export async function billingRoutes(app: FastifyInstance) {
     return reply.status(201).send(row);
   });
 
-  app.delete('/expenses/:id', { config: { perm: ['billing.write', 'time.write'] } }, async (req) => {
+  app.delete('/expenses/:id', { config: { perm: ['billing.write', 'time.write'], forceDelete: { table: 'expenses' } } }, async (req) => {
     const id = idOf(req);
     const [row] = await app.db.select().from(s.expenses).where(eq(s.expenses.id, id));
     if (!row) throw notFound('Expense');
@@ -334,12 +334,12 @@ export async function billingRoutes(app: FastifyInstance) {
     return loadInvoice(id);
   });
 
-  app.delete('/invoices/:id', { config: { perm: 'billing.write' } }, async (req) => {
+  app.delete('/invoices/:id', { config: { perm: 'billing.write', forceDelete: { table: 'invoices' } } }, async (req) => {
     const id = idOf(req);
     await app.db.transaction(async (tx) => {
       const [inv] = await tx.select().from(s.invoices).where(eq(s.invoices.id, id));
       if (!inv) throw notFound('Invoice');
-      if (inv.status !== 'draft') throw badRequest('Only draft invoices can be deleted; void issued invoices instead');
+      if (inv.status !== 'draft') throw inUse('Only draft invoices can be deleted; void issued invoices instead');
       await releaseInvoice(tx, id);
       await tx.delete(s.invoices).where(eq(s.invoices.id, id));
       await audit(tx, req, { action: 'delete', entityType: 'invoice', entityId: id, summary: inv.invoiceNumber });

@@ -4,7 +4,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import { activitySchema, companySchema, contactSchema, locationSchema, opportunitySchema } from '@taskora/shared';
 import * as s from '../../db/schema/index.js';
 import { audit, diff } from '../../lib/audit.js';
-import { badRequest, notFound } from '../../lib/errors.js';
+import { badRequest, notFound, inUse } from '../../lib/errors.js';
 import { idOf } from '../../lib/params.js';
 import { boolParam, countAll, intParam, orderFrom, paginated, parseList, searchAny, whereAll } from '../../lib/query.js';
 import { validateCustomFields } from '../../lib/custom-fields.js';
@@ -197,10 +197,10 @@ export async function crmRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete('/companies/:id', { config: { perm: 'companies.delete' } }, async (req) => {
+  app.delete('/companies/:id', { config: { perm: 'companies.delete', forceDelete: { table: 'companies' } } }, async (req) => {
     const id = idOf(req);
     const [{ n }] = (await app.db.select({ n: countAll }).from(s.tickets).where(eq(s.tickets.companyId, id))) as [{ n: number }];
-    if (n > 0) throw badRequest('This company has tickets. Mark it inactive instead of deleting it.');
+    if (n > 0) throw inUse('This company has tickets. Mark it inactive instead of deleting it.');
     const [row] = await app.db.delete(s.companies).where(eq(s.companies.id, id)).returning();
     if (!row) throw notFound('Company');
     await app.db.delete(s.logos).where(and(eq(s.logos.entityType, 'company'), eq(s.logos.entityId, id)));
@@ -260,7 +260,7 @@ export async function crmRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete('/locations/:id', { config: { perm: 'companies.delete' } }, async (req) => {
+  app.delete('/locations/:id', { config: { perm: 'companies.delete', forceDelete: { table: 'locations' } } }, async (req) => {
     const id = idOf(req);
     const [row] = await app.db.delete(s.locations).where(eq(s.locations.id, id)).returning();
     if (!row) throw notFound('Location');
@@ -360,10 +360,10 @@ export async function crmRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete('/contacts/:id', { config: { perm: 'companies.delete' } }, async (req) => {
+  app.delete('/contacts/:id', { config: { perm: 'companies.delete', forceDelete: { table: 'contacts' } } }, async (req) => {
     const id = idOf(req);
     const [{ n }] = (await app.db.select({ n: countAll }).from(s.tickets).where(eq(s.tickets.contactId, id))) as [{ n: number }];
-    if (n > 0) throw badRequest('This contact is linked to tickets. Mark it inactive instead.');
+    if (n > 0) throw inUse('This contact is linked to tickets. Mark it inactive instead.');
     const [row] = await app.db.delete(s.contacts).where(eq(s.contacts.id, id)).returning();
     if (!row) throw notFound('Contact');
     await audit(app.db, req, { action: 'delete', entityType: 'contact', entityId: id, summary: `${row.firstName} ${row.lastName}` });
@@ -404,7 +404,7 @@ export async function crmRoutes(app: FastifyInstance) {
     return reply.status(201).send(row);
   });
 
-  app.delete('/activities/:id', { config: { perm: 'companies.write' } }, async (req) => {
+  app.delete('/activities/:id', { config: { perm: 'companies.write', forceDelete: { table: 'activities' } } }, async (req) => {
     await app.db.delete(s.activities).where(eq(s.activities.id, idOf(req)));
     return { ok: true };
   });
@@ -461,7 +461,7 @@ export async function crmRoutes(app: FastifyInstance) {
     return row;
   });
 
-  app.delete('/opportunities/:id', { config: { perm: 'opportunities.write' } }, async (req) => {
+  app.delete('/opportunities/:id', { config: { perm: 'opportunities.write', forceDelete: { table: 'opportunities' } } }, async (req) => {
     const id = idOf(req);
     await app.db.delete(s.opportunities).where(eq(s.opportunities.id, id));
     await audit(app.db, req, { action: 'delete', entityType: 'opportunity', entityId: id });

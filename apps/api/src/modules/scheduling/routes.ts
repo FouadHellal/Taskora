@@ -97,7 +97,7 @@ export async function schedulingRoutes(app: FastifyInstance) {
     await audit(app.db, req, { action: 'update', entityType: 'service_call', entityId: id });
     return (await loadCalls(app.db, eq(s.serviceCalls.id, id)))[0];
   });
-  app.delete('/service-calls/:id', { config: { perm: 'tickets.write' } }, async (req) => {
+  app.delete('/service-calls/:id', { config: { perm: 'tickets.write', forceDelete: { table: 'service_calls' } } }, async (req) => {
     const id = idOf(req);
     await app.db.delete(s.serviceCalls).where(eq(s.serviceCalls.id, id));
     await audit(app.db, req, { action: 'delete', entityType: 'service_call', entityId: id });

@@ -3,7 +3,7 @@ import { and, asc, eq, inArray, sql } from 'drizzle-orm';
 import { formatNumber, milestoneSchema, projectSchema, projectTaskSchema } from '@taskora/shared';
 import * as s from '../../db/schema/index.js';
 import { audit, diff } from '../../lib/audit.js';
-import { badRequest, notFound } from '../../lib/errors.js';
+import { badRequest, notFound, inUse } from '../../lib/errors.js';
 import { idOf } from '../../lib/params.js';
 import { countAll, intParam, nextSequence, orderFrom, paginated, parseList, searchAny, whereAll } from '../../lib/query.js';
 import { validateCustomFields } from '../../lib/custom-fields.js';
@@ -129,10 +129,10 @@ export async function projectRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete('/projects/:id', { config: { perm: 'projects.write' } }, async (req) => {
+  app.delete('/projects/:id', { config: { perm: 'projects.write', forceDelete: { table: 'projects' } } }, async (req) => {
     const id = idOf(req);
     const [{ n }] = (await app.db.select({ n: countAll }).from(s.timeEntries).where(eq(s.timeEntries.projectId, id))) as [{ n: number }];
-    if (n > 0) throw badRequest('Time has been logged on this project. Cancel it instead of deleting it.');
+    if (n > 0) throw inUse('Time has been logged on this project. Cancel it instead of deleting it.');
     const [row] = await app.db.delete(s.projects).where(eq(s.projects.id, id)).returning();
     if (!row) throw notFound('Project');
     await audit(app.db, req, { action: 'delete', entityType: 'project', entityId: id, summary: row.name });
@@ -210,7 +210,7 @@ export async function projectRoutes(app: FastifyInstance) {
     if (!row) throw notFound('Milestone');
     return row;
   });
-  app.delete('/projects/:id/milestones/:milestoneId', { config: { perm: 'projects.write' } }, async (req) => {
+  app.delete('/projects/:id/milestones/:milestoneId', { config: { perm: 'projects.write', forceDelete: { table: 'project_milestones', param: 'milestoneId' } } }, async (req) => {
     await app.db.delete(s.projectMilestones).where(and(eq(s.projectMilestones.id, idOf(req, 'milestoneId')), eq(s.projectMilestones.projectId, idOf(req))));
     return { ok: true };
   });
@@ -292,7 +292,7 @@ export async function projectRoutes(app: FastifyInstance) {
     return row;
   });
 
-  app.delete('/project-tasks/:taskId', { config: { perm: 'projects.write' } }, async (req) => {
+  app.delete('/project-tasks/:taskId', { config: { perm: 'projects.write', forceDelete: { table: 'project_tasks', param: 'taskId' } } }, async (req) => {
     const taskId = idOf(req, 'taskId');
     const [{ n }] = (await app.db.select({ n: countAll }).from(s.timeEntries).where(eq(s.timeEntries.projectTaskId, taskId))) as [{ n: number }];
     if (n > 0) throw badRequest('Time has been logged on this task');

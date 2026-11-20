@@ -221,7 +221,7 @@ export async function cmdbRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete('/configuration-items/:id', { config: { perm: 'cis.delete' } }, async (req) => {
+  app.delete('/configuration-items/:id', { config: { perm: 'cis.delete', forceDelete: { table: 'configuration_items' } } }, async (req) => {
     const id = idOf(req);
     const [row] = await app.db.delete(s.configurationItems).where(eq(s.configurationItems.id, id)).returning();
     if (!row) throw notFound('Configuration item');

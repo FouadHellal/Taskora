@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { asc, eq, getTableColumns, sql, type SQL } from 'drizzle-orm';
+import { asc, eq, getTableColumns, getTableName, sql, type SQL } from 'drizzle-orm';
 import type { PgTable, PgColumn } from 'drizzle-orm/pg-core';
 import type { ZodType } from 'zod';
 import type { Permission } from '@taskora/shared';
@@ -91,7 +91,7 @@ export function registerCrud<T extends PgTable>(app: FastifyInstance, o: CrudOpt
     });
   });
 
-  app.delete(`${o.path}/:id`, { config: { perm: o.writePerm } }, async (req) => {
+  app.delete(`${o.path}/:id`, { config: { perm: o.writePerm, forceDelete: { table: getTableName(o.table), reassign: true } } }, async (req) => {
     const id = Number((req.params as { id: string }).id);
     await app.db.transaction(async (tx) => {
       const [row] = (await tx.delete(tableAny).where(eq(idCol, id)).returning()) as Record<string, unknown>[];

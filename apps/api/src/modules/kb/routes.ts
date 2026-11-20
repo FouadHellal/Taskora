@@ -123,7 +123,7 @@ export async function kbRoutes(app: FastifyInstance) {
     return row;
   });
 
-  app.delete('/kb/articles/:id', { config: { perm: 'kb.write' } }, async (req) => {
+  app.delete('/kb/articles/:id', { config: { perm: 'kb.write', forceDelete: { table: 'kb_articles' } } }, async (req) => {
     const id = idOf(req);
     const [row] = await app.db.delete(s.kbArticles).where(eq(s.kbArticles.id, id)).returning();
     if (!row) throw notFound('Article');

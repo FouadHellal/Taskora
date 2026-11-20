@@ -188,7 +188,7 @@ export async function timeRoutes(app: FastifyInstance) {
     return row;
   });
 
-  app.delete('/time-entries/:id', { config: { perm: 'time.write' } }, async (req) => {
+  app.delete('/time-entries/:id', { config: { perm: 'time.write', forceDelete: { table: 'time_entries' } } }, async (req) => {
     const id = idOf(req);
     const me = currentUser(req);
     const [before] = await app.db.select().from(s.timeEntries).where(eq(s.timeEntries.id, id));

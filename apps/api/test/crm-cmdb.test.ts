@@ -44,7 +44,7 @@ describe('companies', () => {
   it('refuses to delete companies with tickets', async () => {
     const co = await makeCompany(admin, 'Keep Co');
     await admin.post('/api/v1/tickets', { title: 'x', companyId: co.id });
-    expect((await admin.delete(`/api/v1/companies/${co.id}`)).status).toBe(400);
+    expect((await admin.delete(`/api/v1/companies/${co.id}`)).status).toBe(409);
   });
 });
 

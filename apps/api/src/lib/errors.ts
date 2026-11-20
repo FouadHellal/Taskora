@@ -17,6 +17,8 @@ export const badRequest = (message: string, details?: unknown) => new AppError(4
 export const forbidden = (message = 'You do not have permission to perform this action') =>
   new AppError(403, 'forbidden', message);
 export const conflict = (message: string) => new AppError(409, 'conflict', message);
+/** The record is still used elsewhere (super admins are offered a force delete). */
+export const inUse = (message: string) => new AppError(409, 'in_use', message);
 export const unauthorized = (message = 'Authentication required') => new AppError(401, 'unauthorized', message);
 
 /** Extracts a postgres error from a driver/drizzle error (which may wrap it in `cause`). */

@@ -141,7 +141,7 @@ export async function recurringRoutes(app: FastifyInstance) {
     return row;
   });
 
-  app.delete('/recurring-tickets/:id', { config: { perm: 'tickets.write' } }, async (req) => {
+  app.delete('/recurring-tickets/:id', { config: { perm: 'tickets.write', forceDelete: { table: 'recurring_tickets' } } }, async (req) => {
     const id = idOf(req);
     const [row] = await app.db.delete(s.recurringTickets).where(eq(s.recurringTickets.id, id)).returning();
     if (!row) throw notFound('Recurring ticket');

@@ -3,7 +3,7 @@ import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { contractBlockSchema, contractRateSchema, contractSchema, contractServiceSchema, formatNumber } from '@taskora/shared';
 import * as s from '../../db/schema/index.js';
 import { audit, diff } from '../../lib/audit.js';
-import { badRequest, notFound } from '../../lib/errors.js';
+import { badRequest, notFound, inUse } from '../../lib/errors.js';
 import { idOf } from '../../lib/params.js';
 import { countAll, intParam, nextSequence, orderFrom, paginated, parseList, searchAny, whereAll } from '../../lib/query.js';
 import { validateCustomFields } from '../../lib/custom-fields.js';
@@ -174,10 +174,10 @@ export async function contractRoutes(app: FastifyInstance) {
     });
   });
 
-  app.delete('/contracts/:id', { config: { perm: 'contracts.write' } }, async (req) => {
+  app.delete('/contracts/:id', { config: { perm: 'contracts.write', forceDelete: { table: 'contracts' } } }, async (req) => {
     const id = idOf(req);
     const [{ n }] = (await app.db.select({ n: countAll }).from(s.timeEntries).where(eq(s.timeEntries.contractId, id))) as [{ n: number }];
-    if (n > 0) throw badRequest('Time has been logged against this contract. Set its status to cancelled instead.');
+    if (n > 0) throw inUse('Time has been logged against this contract. Set its status to cancelled instead.');
     const [row] = await app.db.delete(s.contracts).where(eq(s.contracts.id, id)).returning();
     if (!row) throw notFound('Contract');
     await audit(app.db, req, { action: 'delete', entityType: 'contract', entityId: id, summary: row.name });
