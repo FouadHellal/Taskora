@@ -30,7 +30,7 @@ export default function ContactDetailPage() {
   const id = Number(useParams().id);
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const { can } = useAuth();
+  const { can, me } = useAuth();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const q = useQuery({ queryKey: ['contact', id], queryFn: () => api.get<ContactDetail>(`/contacts/${id}`) });
@@ -140,7 +140,7 @@ export default function ContactDetailPage() {
         open={deleting}
         onOpenChange={setDeleting}
         title={`Delete ${name}?`}
-        description="Contacts linked to tickets cannot be deleted; mark them inactive instead."
+        description={me?.superAdmin ? "Records that still use it will be listed so you can confirm a force delete." : "Contacts linked to tickets cannot be deleted; mark them inactive instead."}
         danger
         confirmLabel="Delete contact"
         loading={remove.isPending}

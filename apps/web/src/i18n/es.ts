@@ -220,6 +220,7 @@ const es: Dict = {
   "columns)": "columnas)",
   "Commercial terms": "Condiciones comerciales",
   "Companies": "Empresas",
+  "Records that still use it will be listed so you can confirm a force delete.": "Se mostrarán los registros que aún lo usan para que pueda confirmar una eliminación forzada.",
   "Companies with tickets cannot be deleted; mark them inactive instead.": "Las empresas con tickets no se pueden eliminar; márquelas como inactivas.",
   "Company": "Empresa",
   "Company (documentation)": "Empresa (documentación)",

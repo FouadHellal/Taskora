@@ -220,6 +220,7 @@ const nl: Dict = {
   "columns)": "kolommen)",
   "Commercial terms": "Commerciële voorwaarden",
   "Companies": "Bedrijven",
+  "Records that still use it will be listed so you can confirm a force delete.": "Records die er nog naar verwijzen worden getoond, zodat u een geforceerde verwijdering kunt bevestigen.",
   "Companies with tickets cannot be deleted; mark them inactive instead.": "Bedrijven met tickets kunnen niet worden verwijderd; markeer ze in plaats daarvan als inactief.",
   "Company": "Bedrijf",
   "Company (documentation)": "Bedrijf (documentatie)",
