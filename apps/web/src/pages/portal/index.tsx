@@ -9,6 +9,11 @@ import { Input, Label, Textarea } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, EmptyState, PageLoader } from '@/components/ui/misc';
 import { StatusBadge } from '@/components/badges';
 import { Markdown } from '@/components/kb/markdown';
+import { PORTAL_IMAGE_URL_RE } from '@taskora/shared';
+import { NoteBody } from '@/components/tickets/note-body';
+
+/** Pasted images are served to the portal by its own image endpoint. */
+const PORTAL_IMAGES = [PORTAL_IMAGE_URL_RE];
 
 /* Minimal client for the separate portal API realm (own cookie + CSRF). */
 let portalCsrf: string | null = null;
@@ -264,7 +269,7 @@ function TicketView() {
       {t.description && (
         <Card>
           <CardBody>
-            <p className="prose-note text-[13px]">{t.description}</p>
+            <NoteBody text={t.description} allow={PORTAL_IMAGES} className="text-[13px]" />
           </CardBody>
         </Card>
       )}
@@ -272,7 +277,7 @@ function TicketView() {
         <Card className="border-success/40">
           <CardHeader title="Resolution" />
           <CardBody>
-            <p className="prose-note text-[13px]">{t.resolution}</p>
+            <NoteBody text={t.resolution} allow={PORTAL_IMAGES} className="text-[13px]" />
           </CardBody>
         </Card>
       )}
@@ -282,7 +287,7 @@ function TicketView() {
             <div className="mb-1 text-[11px] text-muted">
               {n.fromCustomer ? 'You / your colleague' : (n.author ?? 'Support')} · {fmtDateTime(n.createdAt)}
             </div>
-            <p className="prose-note text-[13px]">{n.body}</p>
+            <NoteBody text={n.body} allow={PORTAL_IMAGES} className="text-[13px]" />
           </div>
         ))}
       </div>
