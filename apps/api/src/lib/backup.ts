@@ -6,6 +6,7 @@ import { sql } from 'drizzle-orm';
 import type { Config } from '../config.js';
 import type { Db, Tx } from '../db/client.js';
 import { badRequest } from './errors.js';
+import type { MigrationInfo } from './migration.js';
 
 /**
  * Full logical backups: every table of the `public` schema as JSON (produced
@@ -20,14 +21,14 @@ export const BACKUP_FORMAT_VERSION = 1;
 /** Runtime state that is never backed up (and is cleared on restore). */
 const EXCLUDED_TABLES = new Set(['sessions', 'jobs']);
 
-const NAME_RE = /^taskora-backup-[0-9]{8}-[0-9]{6}(?:-[a-z0-9-]{1,40})?\.json\.gz$/;
+const NAME_RE = /^taskora-(?:backup|migration)-[0-9]{8}-[0-9]{6}(?:-[a-z0-9-]{1,40})?\.json\.gz$/;
 const INSERT_CHUNK = 500;
 
 export interface BackupFile {
   name: string;
   sizeBytes: number;
   createdAt: string;
-  kind: 'auto' | 'manual' | 'pre-restore';
+  kind: 'auto' | 'manual' | 'pre-restore' | 'migration';
 }
 
 export interface BackupSummary {
@@ -36,7 +37,7 @@ export interface BackupSummary {
   files: number;
 }
 
-interface BackupDocument {
+export interface BackupDocument {
   format: string;
   formatVersion: number;
   appVersion: string;
@@ -44,6 +45,8 @@ interface BackupDocument {
   schemaVersion: number;
   tables: Record<string, { rows: Record<string, unknown>[] }>;
   files?: { key: string; data: string }[];
+  /** Present on migration packages: secrets are encrypted with a passphrase (lib/migration.ts). */
+  migration?: MigrationInfo;
 }
 
 const ident = (name: string) => sql.raw(`"${name.replace(/"/g, '""')}"`);
@@ -139,8 +142,11 @@ export function readBackup(buffer: Buffer): BackupDocument {
  * before the transaction commits. Sessions and queued jobs are cleared, so
  * everybody signs in again afterwards.
  */
-export async function restoreBackup(db: Db, config: Config, buffer: Buffer): Promise<BackupSummary> {
-  const doc = readBackup(buffer);
+export async function restoreBackup(db: Db, config: Config, source: Buffer | BackupDocument): Promise<BackupSummary> {
+  const doc = Buffer.isBuffer(source) ? readBackup(source) : source;
+  if (doc.migration) {
+    throw badRequest('This file is a migration package: import it with "Import migration package" and its passphrase so stored passwords keep working.');
+  }
   const current = await schemaVersion(db);
   if (doc.schemaVersion > current) throw badRequest('This backup comes from a newer Taskora version (database schema); update Taskora first');
 
@@ -219,12 +225,14 @@ export function isBackupName(name: string) {
 }
 
 function kindOf(name: string): BackupFile['kind'] {
+  if (name.startsWith('taskora-migration-')) return 'migration';
   return name.includes('-auto') ? 'auto' : name.includes('-pre-restore') ? 'pre-restore' : 'manual';
 }
 
 export function backupFileName(kind: BackupFile['kind'], at = new Date()) {
   const p = (n: number) => String(n).padStart(2, '0');
   const stamp = `${at.getUTCFullYear()}${p(at.getUTCMonth() + 1)}${p(at.getUTCDate())}-${p(at.getUTCHours())}${p(at.getUTCMinutes())}${p(at.getUTCSeconds())}`;
+  if (kind === 'migration') return `taskora-migration-${stamp}.json.gz`;
   return `taskora-backup-${stamp}${kind === 'manual' ? '' : `-${kind}`}.json.gz`;
 }
 

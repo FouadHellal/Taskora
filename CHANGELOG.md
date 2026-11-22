@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.0] — 2026-11-22
+
+### Added
+- **Move Taskora to another server** (Administration → Backup & Restore): a *migration package* holds all data, settings, users, API keys, webhooks, integrations and uploaded files, with stored passwords (SMTP, IMAP, Action1, webhook secrets) re-encrypted with a passphrase, so they keep working on a server with a different `TASKORA_ENCRYPTION_KEY`. Download it or save it on the server; import it on the new server with the passphrase (all-or-nothing, with a safety backup first). Also from a shell: `node dist/cli/migration.js export|import`. See [docs/deployment.md](docs/deployment.md#moving-to-another-server-vm--vps).
+- nginx accepts larger uploads (default 1024 MB, `NGINX_RESTORE_MAX_BODY_SIZE`) for restoring backups and importing migration packages only, streamed to the API.
+
+### Changed
+- Restoring a migration package as a normal backup is refused with a pointer to *Import migration package*.
+
 ## [0.4.0] — 2026-11-20
 
 ### Added

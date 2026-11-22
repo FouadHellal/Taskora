@@ -149,9 +149,10 @@ LABEL org.opencontainers.image.title="taskora-web" \
 # Runtime settings rendered into conf.d/taskora.conf by the image entrypoint.
 # The filter restricts envsubst to these variables only.
 ENV NGINX_CLIENT_MAX_BODY_SIZE=30m \
+    NGINX_RESTORE_MAX_BODY_SIZE=1024m \
     NGINX_REAL_IP_FROM=127.0.0.1/32 \
     NGINX_API_UPSTREAM=api:3000 \
-    NGINX_ENVSUBST_FILTER="^NGINX_(CLIENT_MAX_BODY_SIZE|REAL_IP_FROM|API_UPSTREAM)$"
+    NGINX_ENVSUBST_FILTER="^NGINX_(CLIENT_MAX_BODY_SIZE|RESTORE_MAX_BODY_SIZE|REAL_IP_FROM|API_UPSTREAM)$"
 
 RUN rm -f /etc/nginx/conf.d/default.conf \
  && rm -rf /usr/share/nginx/html/* \
@@ -167,7 +168,7 @@ USER nginx
 
 # Validate the configuration at build time (as the runtime user, with the
 # default settings), then remove the rendered file and nginx temp dirs again.
-RUN envsubst "$(printf '${%s} ' NGINX_CLIENT_MAX_BODY_SIZE NGINX_REAL_IP_FROM NGINX_API_UPSTREAM)" \
+RUN envsubst "$(printf '${%s} ' NGINX_CLIENT_MAX_BODY_SIZE NGINX_RESTORE_MAX_BODY_SIZE NGINX_REAL_IP_FROM NGINX_API_UPSTREAM)" \
       < /etc/nginx/templates/taskora.conf.template > /etc/nginx/conf.d/taskora.conf \
  && nginx -t \
  && rm -rf /etc/nginx/conf.d/taskora.conf /tmp/*_temp /tmp/nginx.pid

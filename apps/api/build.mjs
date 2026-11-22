@@ -7,7 +7,7 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 const external = Object.keys(pkg.dependencies).filter((d) => !d.startsWith('@taskora/'));
 
 await build({
-  entryPoints: ['src/server.ts', 'src/worker.ts', 'src/db/migrate-cli.ts', 'src/db/seed/demo-cli.ts', 'src/cli/reset-password.ts', 'src/cli/api-docs.ts'],
+  entryPoints: ['src/server.ts', 'src/worker.ts', 'src/db/migrate-cli.ts', 'src/db/seed/demo-cli.ts', 'src/cli/reset-password.ts', 'src/cli/api-docs.ts', 'src/cli/migration.ts'],
   outdir: 'dist',
   bundle: true,
   platform: 'node',

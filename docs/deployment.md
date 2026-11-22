@@ -134,6 +134,24 @@ docker run --rm -v taskora_taskora-backups:/b -v "$PWD":/out alpine cp -r /b /ou
 
 The `pg_dump` scripts above remain the right tool for disaster recovery of the whole stack; UI backups are portable between Taskora installations of the same or a newer version.
 
+### Moving to another server (VM → VPS)
+
+A **migration package** contains everything — all tables (tickets, companies, users and roles, settings, custom fields, workflows, API keys, webhooks, integrations, logos…) and all uploaded files — with the stored passwords (SMTP, IMAP, Action1, webhook secrets) re-encrypted with a passphrase you choose, so they work on a server with a different `TASKORA_ENCRYPTION_KEY`.
+
+1. **Old server**: Administration → Backup & Restore → *Move Taskora to another server* → passphrase → **Download migration package** (or **Save it on this server**, or from a shell:
+   `docker compose exec -e TASKORA_MIGRATION_PASSPHRASE='…' api node dist/cli/migration.js export`).
+2. **New server**: install Taskora (sections 1–4), create a temporary administrator with the setup token.
+3. **New server**: Backup & Restore → **Import migration package…** → same passphrase → type RESTORE. Everybody signs in again with their old accounts.
+
+Large packages (above `MAX_RESTORE_MB`, default 512 MB): copy the file into the backups volume and import it from the list or the shell:
+
+```bash
+docker run --rm -v taskora_taskora-backups:/b -v "$PWD":/in alpine sh -c 'cp /in/taskora-migration-*.json.gz /b/ && chown 1000:1000 /b/*'
+docker compose exec -e TASKORA_MIGRATION_PASSPHRASE='…' api node dist/cli/migration.js import taskora-migration-YYYYMMDD-HHMMSS.json.gz --yes
+```
+
+Not included: the `.env` file (set `PUBLIC_URL`, HTTPS and ports on the new server; it keeps its own `TASKORA_ENCRYPTION_KEY`), sign-in sessions and old backups. Point n8n and other tools that call Taskora at the new address.
+
 ## 6. Action1
 
 Administration → Integrations → Action1: choose the region, enter an API client ID/secret (Action1 → API credentials), test the connection, map each Action1 organization to a Taskora company, enable the integration and run a sync. The worker then syncs on the configured interval. The integration only reads data from Action1.

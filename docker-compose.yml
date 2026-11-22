@@ -141,6 +141,8 @@ services:
     restart: unless-stopped
     environment:
       NGINX_CLIENT_MAX_BODY_SIZE: ${NGINX_CLIENT_MAX_BODY_SIZE:-30m}
+      # Uploaded backups / migration packages (the API also enforces MAX_RESTORE_MB).
+      NGINX_RESTORE_MAX_BODY_SIZE: ${NGINX_RESTORE_MAX_BODY_SIZE:-1024m}
       NGINX_REAL_IP_FROM: ${TASKORA_TRUSTED_PROXY:-127.0.0.1/32}
       NGINX_API_UPSTREAM: api:3000
     ports:

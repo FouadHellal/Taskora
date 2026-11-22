@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArchiveRestore, DatabaseBackup, Download, HardDriveDownload, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { ArchiveRestore, DatabaseBackup, Download, HardDriveDownload, KeyRound, RotateCcw, Server, Trash2, Truck, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError, downloadUrl, request } from '@/lib/api';
 import { fmtDateTime, fmtRelative } from '@/lib/utils';
@@ -16,7 +16,7 @@ interface BackupFile {
   name: string;
   sizeBytes: number;
   createdAt: string;
-  kind: 'auto' | 'manual' | 'pre-restore';
+  kind: 'auto' | 'manual' | 'pre-restore' | 'migration';
 }
 
 interface BackupList {
@@ -32,12 +32,15 @@ interface RestoreResult {
   rows: number;
   files: number;
   safetyBackup: string | null;
+  migratedFrom?: string | null;
+  skippedSecrets?: string[];
 }
 
 const KIND: Record<BackupFile['kind'], { label: string; tone: 'neutral' | 'info' | 'warning' }> = {
   manual: { label: 'Manual', tone: 'neutral' },
   auto: { label: 'Automatic', tone: 'info' },
   'pre-restore': { label: 'Before restore', tone: 'warning' },
+  migration: { label: 'Migration package', tone: 'info' },
 };
 
 export function fmtBytes(n: number) {
@@ -48,7 +51,7 @@ export function fmtBytes(n: number) {
 }
 
 /** Restore target: a backup kept on the server, or an uploaded file. */
-type RestoreSource = { kind: 'server'; name: string } | { kind: 'upload'; file: File };
+type RestoreSource = { kind: 'server'; name: string; migration?: boolean } | { kind: 'upload'; file: File; migration?: boolean };
 
 export default function BackupsPage() {
   const qc = useQueryClient();
@@ -92,8 +95,8 @@ export default function BackupsPage() {
           <Button size="sm" variant="ghost" onClick={() => downloadUrl(`/admin/backups/${encodeURIComponent(row.original.name)}`)}>
             <Download /> Download
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => setRestoring({ kind: 'server', name: row.original.name })}>
-            <RotateCcw /> Restore
+          <Button size="sm" variant="ghost" onClick={() => setRestoring({ kind: 'server', name: row.original.name, migration: row.original.kind === 'migration' })}>
+            <RotateCcw /> {row.original.kind === 'migration' ? 'Import' : 'Restore'}
           </Button>
           <Button size="icon-sm" variant="ghost" onClick={() => setDeleting(row.original.name)} aria-label="Delete backup">
             <Trash2 />
@@ -107,6 +110,8 @@ export default function BackupsPage() {
     <div>
       <PageHeader title="Backup & Restore" icon={<DatabaseBackup />} subtitle="Full backups of all Taskora data: tickets, companies, contacts, assets, Action1 sync data, settings, users and files" />
       <div className="space-y-4 p-5">
+        <MoveServer onImport={(file) => setRestoring({ kind: 'upload', file, migration: true })} />
+
         <Card>
           <CardHeader title="Create a backup" description="One compressed file with every table and, optionally, all uploaded attachments. Sessions and queued jobs are not included." />
           <CardBody className="space-y-4">
@@ -134,8 +139,8 @@ export default function BackupsPage() {
               />
             </div>
             <p className="text-xs text-muted">
-              Server folder: <span className="font-mono">{d.directory}</span>. Integration secrets (Action1, SMTP) are stored encrypted with <span className="font-mono">TASKORA_ENCRYPTION_KEY</span>; keep that key with your
-              backups to restore them on another server.
+              Server folder: <span className="font-mono">{d.directory}</span>. Stored passwords (Action1, SMTP, IMAP, webhook secrets) are encrypted with this server&apos;s <span className="font-mono">TASKORA_ENCRYPTION_KEY</span>. To move to another
+              server, use <b>Move Taskora to another server</b> above so they keep working.
             </p>
           </CardBody>
         </Card>
@@ -158,7 +163,7 @@ export default function BackupsPage() {
         loading={remove.isPending}
         onConfirm={() => deleting && remove.mutate(deleting)}
       />
-      {restoring && <RestoreDialog source={restoring} onClose={() => setRestoring(null)} />}
+      {restoring && (restoring.migration ? <MigrationImportDialog source={restoring} onClose={() => setRestoring(null)} /> : <RestoreDialog source={restoring} onClose={() => setRestoring(null)} />)}
     </div>
   );
 }
@@ -247,6 +252,169 @@ function RestoreDialog({ source, onClose }: { source: RestoreSource; onClose: ()
         <FormField label="Type RESTORE to confirm">
           <Input value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="off" />
         </FormField>
+      </div>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------- move to another server */
+
+function MoveServer({ onImport }: { onImport: (file: File) => void }) {
+  const qc = useQueryClient();
+  const [pass, setPass] = useState('');
+  const [pass2, setPass2] = useState('');
+  const [busy, setBusy] = useState<'download' | 'save' | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const valid = pass.length >= 10 && pass === pass2;
+
+  const run = async (save: boolean) => {
+    setBusy(save ? 'save' : 'download');
+    try {
+      if (save) {
+        const r = await api.post<{ name: string; sizeBytes: number; skipped: string[] }>('/admin/migration/export', { passphrase: pass, save: true });
+        toast.success(`Migration package ${r.name} (${fmtBytes(r.sizeBytes)}) saved on the server`);
+        if (r.skipped.length) toast.warning(`Unreadable secrets left empty: ${r.skipped.join(', ')}`, { duration: 15000 });
+        qc.invalidateQueries({ queryKey: ['backups'] });
+      } else {
+        const res = await request<Response>('POST', '/admin/migration/export', { passphrase: pass, save: false }, { raw: true });
+        const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? 'taskora-migration.json.gz';
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+        toast.success(`Downloaded ${name} (${fmtBytes(blob.size)})`);
+      }
+    } catch (e) {
+      toast.error(e instanceof ApiError ? e.message : 'Export failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader
+        title="Move Taskora to another server"
+        description="Copy everything (tickets, companies, contacts, assets, contracts, invoices, time, projects, knowledge base, settings, users and roles, custom fields, workflows, e-mail settings, API keys, webhooks, integrations, logos and attachments) to a new Taskora server in one file."
+      />
+      <CardBody className="space-y-5 text-[13px]">
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 font-semibold">
+              <Truck className="size-4 text-primary" /> 1. On the old server: export
+            </div>
+            <p className="text-xs text-muted">
+              Choose a passphrase. It protects the stored passwords inside the file (SMTP, IMAP, Action1, webhook secrets) so they keep working on the new server. You need it to import; it is
+              not stored anywhere.
+            </p>
+            <FormGrid cols={2}>
+              <FormField label="Passphrase" hint="At least 10 characters">
+                <Input type="password" autoComplete="new-password" value={pass} onChange={(e) => setPass(e.target.value)} />
+              </FormField>
+              <FormField label="Repeat passphrase" error={pass2 && pass !== pass2 ? 'Does not match' : undefined}>
+                <Input type="password" autoComplete="new-password" value={pass2} onChange={(e) => setPass2(e.target.value)} />
+              </FormField>
+            </FormGrid>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" disabled={!valid || !!busy} loading={busy === 'download'} onClick={() => run(false)}>
+                <Download /> Download migration package
+              </Button>
+              <Button disabled={!valid || !!busy} loading={busy === 'save'} onClick={() => run(true)}>
+                <Server /> Save it on this server
+              </Button>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 font-semibold">
+              <KeyRound className="size-4 text-primary" /> 2. On the new server: import
+            </div>
+            <p className="text-xs text-muted">
+              Install Taskora on the new server, create a temporary administrator, open this page and import the file with the same passphrase. All data on the new server is replaced; afterwards
+              everybody signs in with their accounts from the old server.
+            </p>
+            <Button onClick={() => fileInput.current?.click()}>
+              <Upload /> Import migration package…
+            </Button>
+            <input
+              ref={fileInput}
+              type="file"
+              accept=".gz,.json,application/gzip,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) onImport(file);
+              }}
+            />
+            <p className="text-xs text-muted">
+              Very large file? Copy it into the server backups folder and use <b>Import</b> in the list below, or the command line{' '}
+              <span className="font-mono">node dist/cli/migration.js import &lt;file&gt; --yes</span>.
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-muted">
+          Not included (set these on the new server): the <span className="font-mono">.env</span> file (domain, HTTPS, ports and its own encryption key), open sign-in sessions and old backups.
+        </p>
+      </CardBody>
+    </Card>
+  );
+}
+
+function MigrationImportDialog({ source, onClose }: { source: RestoreSource; onClose: () => void }) {
+  const [passphrase, setPassphrase] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [safetyBackup, setSafetyBackup] = useState(true);
+  const run = useMutation({
+    mutationFn: async () => {
+      if (source.kind === 'server') return api.post<RestoreResult>(`/admin/migration/import/${encodeURIComponent(source.name)}`, { passphrase, confirm, safetyBackup });
+      const fd = new FormData();
+      // The passphrase must come before the file in the multipart body.
+      fd.append('passphrase', passphrase);
+      fd.append('file', source.file, source.file.name);
+      return request<RestoreResult>('POST', '/admin/migration/import', fd, { query: { confirm, safetyBackup: safetyBackup ? 'true' : 'false' } });
+    },
+    onSuccess: (r) => {
+      toast.success(`Imported ${r.rows} records and ${r.files} files${r.migratedFrom ? ` from ${r.migratedFrom}` : ''}. Sign in with your account from the old server.`, { duration: 12000 });
+      if (r.skippedSecrets?.length) toast.warning(`Re-enter these in Settings: ${r.skippedSecrets.join(', ')}`, { duration: 20000 });
+      setTimeout(() => window.location.assign('/login'), 2500);
+    },
+    onError: (e) => toast.error(e instanceof ApiError ? e.message : 'Import failed', { duration: 10000 }),
+  });
+  const label = source.kind === 'server' ? source.name : `${source.file.name} (${fmtBytes(source.file.size)})`;
+  return (
+    <Dialog
+      open
+      onOpenChange={(o) => !o && !run.isPending && onClose()}
+      title="Import migration package"
+      size="sm"
+      footer={
+        <>
+          <Button onClick={onClose} disabled={run.isPending}>
+            Cancel
+          </Button>
+          <Button variant="danger" disabled={confirm !== 'RESTORE' || passphrase.length < 10} loading={run.isPending} onClick={() => run.mutate()}>
+            <ArchiveRestore /> Import and replace all data
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-3 text-[13px]">
+        <p>
+          <b>All data on this server will be replaced</b> by <span className="break-all font-mono text-xs">{label}</span>, including users, settings and integrations. Everyone, including you, is
+          signed out afterwards. If anything fails (for example a wrong passphrase), nothing changes.
+        </p>
+        <FormField label="Passphrase used for the export">
+          <Input type="password" autoComplete="off" value={passphrase} onChange={(e) => setPassphrase(e.target.value)} />
+        </FormField>
+        <Checkbox label="Save the current data as a backup first (recommended)" checked={safetyBackup} onChange={(e) => setSafetyBackup(e.target.checked)} />
+        <FormField label="Type RESTORE to confirm">
+          <Input value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="off" />
+        </FormField>
+        {run.isPending && <p className="text-xs text-muted">Importing… large installations can take a few minutes. Keep this page open.</p>}
       </div>
     </Dialog>
   );

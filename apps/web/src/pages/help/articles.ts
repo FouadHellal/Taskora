@@ -227,6 +227,14 @@ Force delete cannot be undone. Make a backup first in [Backup & Restore](/admin/
 - [Backup & Restore](/admin/backups) makes a full backup (all data and uploaded files) on the server or as a download, and runs automatic backups on a schedule.
 - Keep a copy of your server's \`.env\` file with the backups — it contains the encryption key for stored passwords.
 
+### Moving Taskora to another server (e.g. a VPS)
+1. On the old server open [Backup & Restore](/admin/backups) → **Move Taskora to another server**, choose a passphrase and **Download migration package**.
+2. Install Taskora on the new server (see \`docs/deployment.md\`), create a temporary administrator with the setup token and sign in.
+3. Open Backup & Restore → **Import migration package…**, pick the file, enter the passphrase and type RESTORE.
+4. Everybody signs in again with their accounts from the old server. Tickets, settings, users, API keys, webhooks, e-mail and integration passwords and attachments all come along.
+
+Set the new server's address (\`PUBLIC_URL\`), HTTPS and ports in its \`.env\` — those are not part of the package. If n8n or other tools call Taskora, point them at the new address.
+
 ### Updating the server
 On the server, in the Taskora folder:
 
