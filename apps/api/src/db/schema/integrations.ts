@@ -1,5 +1,8 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+
+/** Byte counters can exceed 2^31. */
+const numericBig = (name: string) => bigint(name, { mode: 'number' });
 import { createdAt, id, updatedAt, users } from './core.js';
 import { companies, contacts } from './crm.js';
 import { configurationItems, tickets } from './service.js';
@@ -260,3 +263,99 @@ export const webhooks = pgTable('webhooks', {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+/* ------------------------------------------------------------------ TP-Link Omada */
+
+/** Omada site → Taskora company mapping (explicit, never guessed). */
+export const omadaSites = pgTable('omada_sites', {
+  id: id(),
+  siteId: text('site_id').notNull().unique(),
+  name: text('name').notNull(),
+  companyId: integer('company_id').references(() => companies.id, { onDelete: 'set null' }),
+  enabled: boolean('enabled').notNull().default(true),
+  deviceCount: integer('device_count').notNull().default(0),
+  clientCount: integer('client_count').notNull().default(0),
+  lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** Snapshot of an Omada-managed device (access point, switch, gateway), keyed by MAC. */
+export const omadaDevices = pgTable(
+  'omada_devices',
+  {
+    id: id(),
+    mac: text('mac').notNull().unique(),
+    siteId: text('site_id').notNull(),
+    configurationItemId: integer('configuration_item_id').references(() => configurationItems.id, { onDelete: 'set null' }),
+    /** 'ap' | 'switch' | 'gateway' | 'other' */
+    kind: text('kind').notNull(),
+    name: text('name'),
+    model: text('model'),
+    serialNumber: text('serial_number'),
+    firmwareVersion: text('firmware_version'),
+    ipAddress: text('ip_address'),
+    /** 'online' | 'offline' | 'pending' | … (from statusCategory/detailStatus) */
+    status: text('status'),
+    statusDetail: text('status_detail'),
+    uptimeSeconds: integer('uptime_seconds'),
+    cpuUtil: integer('cpu_util'),
+    memUtil: integer('mem_util'),
+    clientCount: integer('client_count'),
+    clientCount2g: integer('client_count_2g'),
+    clientCount5g: integer('client_count_5g'),
+    clientCount6g: integer('client_count_6g'),
+    uplinkDeviceName: text('uplink_device_name'),
+    uplinkPort: text('uplink_port'),
+    linkSpeed: text('link_speed'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    raw: jsonb('raw').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    /** Set when the device was absent from the latest sync of its site (never auto-deleted). */
+    missingSince: timestamp('missing_since', { withTimezone: true }),
+    firstSeenAt: timestamp('first_seen_at', { withTimezone: true }).notNull().defaultNow(),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('omada_devices_site_idx').on(t.siteId),
+    uniqueIndex('omada_devices_ci_uq').on(t.configurationItemId).where(sql`${t.configurationItemId} is not null`),
+  ],
+);
+
+/** Clients seen on Omada devices (online at the last sync, or recently). */
+export const omadaClients = pgTable(
+  'omada_clients',
+  {
+    id: id(),
+    siteId: text('site_id').notNull(),
+    mac: text('mac').notNull(),
+    /** MAC of the AP (wireless) or switch (wired) the client is connected to. */
+    deviceMac: text('device_mac'),
+    name: text('name'),
+    hostName: text('host_name'),
+    ipAddress: text('ip_address'),
+    vendor: text('vendor'),
+    osName: text('os_name'),
+    deviceType: text('device_type'),
+    wireless: boolean('wireless').notNull().default(false),
+    ssid: text('ssid'),
+    networkName: text('network_name'),
+    rssi: integer('rssi'),
+    signalLevel: integer('signal_level'),
+    snr: integer('snr'),
+    wifiMode: text('wifi_mode'),
+    channel: integer('channel'),
+    radio: text('radio'),
+    rxRate: integer('rx_rate'),
+    txRate: integer('tx_rate'),
+    trafficDown: numericBig('traffic_down'),
+    trafficUp: numericBig('traffic_up'),
+    uptimeSeconds: integer('uptime_seconds'),
+    switchPort: text('switch_port'),
+    guest: boolean('guest').notNull().default(false),
+    active: boolean('active').notNull().default(true),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    raw: jsonb('raw').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('omada_clients_site_mac_uq').on(t.siteId, t.mac), index('omada_clients_device_idx').on(t.deviceMac)],
+);

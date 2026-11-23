@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.10.0] — 2026-11-23
+
+### Added
+- **TP-Link Omada integration** (*Administration → Integrations → TP-Link Omada*, also *Assets → Omada Wi-Fi*), read-only, through the controller's Open API (client-credentials app):
+  - controller address, Client ID / secret (encrypted), optional Omada ID (read from `/api/info` otherwise), TLS verification switch for self-signed controllers, sync interval, which devices become CIs (access points by default, optionally switches and gateways), *Test connection*;
+  - **sites mapped explicitly to companies**; devices of mapped sites are linked to configuration items — matched by MAC address, then serial number, then name within the company, otherwise created (type *Wireless Access Point*, *Network Switch* or *Router*, manufacturer TP-Link) — and the CI's IP, firmware, serial and last-seen stay current;
+  - per device: status, uptime, CPU / memory, firmware, uplink and link speed, clients per band;
+  - **connected clients** per access point (name, host name, IP, vendor, OS, SSID, channel, signal, traffic, connection time) shown on the CI page; clients not seen for 30 days are forgotten, devices that disappear are flagged, never deleted;
+  - scheduled synchronisation by the worker, manual *Synchronise now*, token renewal, rate-limit back-off and the v1 client list for controllers without v2.
+
+### Upgrade notes
+- `bash scripts/update.sh`. Migration `0015_omada_integration` only adds three tables (`omada_sites`, `omada_devices`, `omada_clients`); no existing data is changed.
+
 ## [0.9.0] — 2026-11-23
 
 ### Added

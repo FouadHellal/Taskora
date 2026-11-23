@@ -765,3 +765,36 @@ export const action1EndpointResolveSchema = z.object({
   action: z.enum(['link', 'create', 'ignore', 'unignore']),
   configurationItemId: optId,
 });
+
+/* ------------------------------------------------------------- TP-Link Omada */
+
+export const OMADA_DEVICE_KINDS = ['ap', 'switch', 'gateway'] as const;
+
+export const omadaSettingsSchema = z.object({
+  enabled: z.boolean().default(false),
+  /** Controller address, e.g. https://192.168.0.10:8043 (on-premise) or the cloud northbound URL. */
+  baseUrl: z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => v === '' || /^https?:\/\/[^\s/]+(:\d+)?(\/.*)?$/i.test(v), 'Use https://host:port')
+    .transform((v) => v.replace(/\/+$/, ''))
+    .default(''),
+  /** Read from the controller (/api/info) when empty. */
+  omadacId: z.string().trim().max(100).default(''),
+  /** Leave empty to keep the stored value. */
+  clientId: z.string().trim().max(255).optional(),
+  clientSecret: z.string().trim().max(1024).optional(),
+  /** Controllers usually have a self-signed certificate: off by default. */
+  verifyTls: z.boolean().default(false),
+  syncIntervalMinutes: z.coerce.number().int().min(5).max(1440).default(15),
+  /** Create a CI for each device of a mapped site that matches no existing CI. */
+  autoCreateCis: z.boolean().default(true),
+  /** Which Omada devices become CIs. */
+  deviceKinds: z.array(z.enum(OMADA_DEVICE_KINDS)).min(1).default(['ap']),
+});
+
+export const omadaSiteMappingSchema = z.object({
+  companyId: optId,
+  enabled: z.boolean().default(true),
+});

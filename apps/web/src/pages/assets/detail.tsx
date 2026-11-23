@@ -14,6 +14,7 @@ import { ConfirmDialog, Tabs, TabsContent, TabsList, TabsTrigger } from '@/compo
 import { Input, Select } from '@/components/ui/input';
 import { LifecycleBadge } from '@/components/badges';
 import { Action1Panel } from '@/components/action1-panel';
+import { OmadaPanel } from '@/components/omada-panel';
 import { AtlasCiPanel } from '@/components/atlas-panel';
 import { CiFormDialog, type CiRecord } from '@/components/forms/ci-form';
 import { CustomFieldsView } from '@/components/custom-fields';
@@ -129,6 +130,8 @@ export default function CiDetailPage() {
               </CardBody>
             </Card>
           </div>
+
+          <OmadaPanel ciId={id} />
 
           <Card>
             <CardHeader title="Action1 endpoint" description="Live device state synchronised from Action1 (read-only)" />

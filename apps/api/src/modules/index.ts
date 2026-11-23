@@ -26,6 +26,7 @@ import { logoRoutes } from './logos/routes.js';
 import { emailRoutes } from './email/routes.js';
 import { developerRoutes } from './developer/routes.js';
 import { clientReportRoutes } from './client-reports/routes.js';
+import { omadaRoutes } from './integrations/omada-routes.js';
 
 export async function registerModules(app: FastifyInstance) {
   await app.register(settingsRoutes);
@@ -55,4 +56,5 @@ export async function registerModules(app: FastifyInstance) {
   await app.register(emailRoutes);
   await app.register(developerRoutes);
   await app.register(clientReportRoutes);
+  await app.register(omadaRoutes);
 }

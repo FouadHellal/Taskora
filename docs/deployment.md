@@ -190,7 +190,14 @@ Every new ticket also gets an internal *Automatic analysis* note (topic, device,
 - **Monthly reports**: prepared on the chosen day for every company with an active contract or portal users (as drafts by default). Review and publish them in **Insights → Client reports**. The worker container does this; nothing else to schedule.
 - **Contract & billing**: put your price list in **Services** (per device of a type, per user, or a fixed quantity), add the services to each client's contract with **Count automatically**, and set the billing period (quarterly, annual…). Company managers see it in the portal.
 
-## 7. Action1
+## 7. TP-Link Omada (Wi-Fi access points)
+
+1. In the Omada controller: **Global View → Settings → Platform Integration → Open API → Add New App**, name `Taskora`, mode **Client** (client credentials), no redirect URL, read access (Viewer) to the sites to synchronise. Copy the Client ID and Client Secret.
+2. Taskora must reach the controller: on-premise controllers listen on `https://<ip>:8043` (OC200/OC300 often `:443`). If Taskora runs in Azure and the controller on a client LAN, publish the controller (VPN, port forward restricted to the Taskora server's public IP) or use the Omada cloud-based controller's northbound address.
+3. **Administration → Integrations → TP-Link Omada → Settings**: controller address, Client ID and secret, leave *Verify the TLS certificate* unticked for a factory certificate, *Test connection*, tick *Synchronise* and save.
+4. **Sites** tab: map each Omada site to its company, then **Synchronise now**. Access points appear as configuration items of the company, with their status and connected clients on the CI page.
+
+## 8. Action1
 
 Administration → Integrations → Action1: choose the region, enter an API client ID/secret (Action1 → API credentials), test the connection, map each Action1 organization to a Taskora company, enable the integration and run a sync. The worker then syncs on the configured interval. The integration only reads data from Action1.
 

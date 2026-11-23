@@ -28,6 +28,7 @@ import { sendClientReplyAlert, sendReportPublishedEmails, sendTicketCreatedEmail
 import { monthlyReportsDue, runMonthlyReports } from './modules/client-reports/service.js';
 import { refreshAutoQuantities } from './modules/contracts/quantities.js';
 import { analyzeTicket } from './modules/tickets/insights.js';
+import { runOmadaSync } from './integrations/omada/sync.js';
 
 const config = loadConfig();
 const log = pino({ level: config.LOG_LEVEL, base: { svc: 'worker' } });
@@ -54,6 +55,7 @@ const handlers: Record<string, Handler> = {
   'email.report_published': (db, cfg, job) => sendReportPublishedEmails(db, cfg, Number(job.payload.reportId)),
   'reports.monthly': (db, cfg, job) => runMonthlyReports(db, cfg, String(job.payload.period)),
   'contracts.refresh_quantities': (db) => refreshAutoQuantities(db),
+  'omada.sync': (db, cfg, job) => runOmadaSync(db, cfg, { trigger: (job.payload.trigger as 'manual' | 'scheduled') ?? 'scheduled', userId: (job.payload.userId as number | null) ?? null }),
   'tickets.analyze': (db, _cfg, job) => analyzeTicket(db, Number(job.payload.ticketId)),
   'email.inbound': (db, cfg) => pollInbox(db, cfg, (m) => log.info({ job: 'email.inbound' }, m)),
   'webhook.deliver': (db, cfg, job) => deliverWebhook(db, cfg, job.payload),
@@ -90,6 +92,11 @@ async function schedule(db: Db) {
     .from(integrations)
     .where(and(eq(integrations.provider, 'action1'), eq(integrations.enabled, true), lte(integrations.nextSyncAt, new Date())));
   if (a1) await enqueue(db, 'action1.sync', { trigger: 'scheduled' }, { dedupeKey: 'action1.sync', maxAttempts: 3 });
+  const [omada] = await db
+    .select()
+    .from(integrations)
+    .where(and(eq(integrations.provider, 'omada'), eq(integrations.enabled, true), lte(integrations.nextSyncAt, new Date())));
+  if (omada) await enqueue(db, 'omada.sync', { trigger: 'scheduled' }, { dedupeKey: 'omada.sync', maxAttempts: 2 });
 }
 
 async function main() {

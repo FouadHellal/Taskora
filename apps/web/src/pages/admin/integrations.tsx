@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Plug, Radar, RefreshCw, ShieldCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Plug, Radar, RefreshCw, ShieldCheck, Wifi, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { ACTION1_REGIONS, SYNC_STATUS } from '@taskora/shared';
 import { api, ApiError, type Paginated } from '@/lib/api';
@@ -75,6 +75,7 @@ export default function IntegrationsPage() {
       <PageHeader title="Integrations" icon={<Plug />} subtitle="Connect Taskora to your RMM and other tools" />
       <div className="space-y-4 p-5">
         <AtlasCard />
+        <OmadaCard />
         <Card>
           <CardHeader
             title={
@@ -127,6 +128,38 @@ export default function IntegrationsPage() {
         </Tabs>
       </div>
     </div>
+  );
+}
+
+function OmadaCard() {
+  const q = useQuery({ queryKey: ['omada'], queryFn: () => api.get<{ enabled: boolean; status: string; lastSuccessAt: string | null; counts: { sites: number; mappedSites: number; devices: number; online: number; clients: number } }>('/integrations/omada') });
+  const o = q.data;
+  return (
+    <Card>
+      <CardHeader
+        title={
+          <span className="flex items-center gap-2">
+            <Wifi className="size-4" /> TP-Link Omada {o?.enabled ? <Badge tone={o.status === 'error' ? 'danger' : 'success'}>{o.status === 'error' ? 'Error' : 'Enabled'}</Badge> : <Badge>Disabled</Badge>}
+          </span>
+        }
+        description="Wi-Fi access points, switches and gateways from the Omada controller, with their connected clients"
+        actions={
+          <Link to="/integrations/omada">
+            <Button size="sm">Open</Button>
+          </Link>
+        }
+      />
+      {o && (
+        <CardBody>
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat label="Sites mapped" value={`${o.counts.mappedSites} / ${o.counts.sites}`} />
+            <Stat label="Devices" value={o.counts.devices} />
+            <Stat label="Clients connected" value={o.counts.clients} />
+            <Stat label="Last success" value={o.lastSuccessAt ? fmtRelative(o.lastSuccessAt) : '—'} />
+          </div>
+        </CardBody>
+      )}
+    </Card>
   );
 }
 

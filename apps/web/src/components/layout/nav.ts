@@ -1,5 +1,6 @@
 import {
   Activity,
+  Wifi,
   FileBarChart,
   BarChart3,
   Bell,
@@ -151,6 +152,7 @@ export const NAV: NavSection[] = [
         ],
       },
       { label: 'Action1 Endpoints', to: '/integrations/action1/endpoints', icon: Plug, perm: 'integrations.read' },
+      { label: 'Omada Wi-Fi', to: '/integrations/omada', icon: Wifi, perm: 'integrations.read' },
     ],
   },
   {

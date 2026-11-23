@@ -24,8 +24,9 @@ import {
   type IntegrationRow,
 } from '../../integrations/action1/sync.js';
 import type { Tx } from '../../db/client.js';
+import { getOmadaIntegration } from '../../integrations/omada/sync.js';
 
-const PROVIDER_LABELS: Record<string, string> = { action1: 'Action1' };
+const PROVIDER_LABELS: Record<string, string> = { action1: 'Action1', omada: 'TP-Link Omada' };
 
 const testBodySchema = z
   .object({
@@ -108,7 +109,8 @@ export async function integrationRoutes(app: FastifyInstance) {
   /* ------------------------------------------------------------ overview */
 
   app.get('/integrations', { config: { perm: 'integrations.read' } }, async () => {
-    await getAction1Integration(db); // make sure the known provider row exists
+    await getAction1Integration(db); // make sure the known provider rows exist
+    await getOmadaIntegration(db);
     const rows = await db.select().from(s.integrations).orderBy(asc(s.integrations.provider));
     return rows.map((r) => ({
       id: r.id,
