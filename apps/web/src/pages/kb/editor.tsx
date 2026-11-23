@@ -80,13 +80,13 @@ export default function ArticleEditorPage() {
           <FormField label="Company (documentation)">
             <EntityPicker kind="company" value={f.companyId} label={companyLabel} onChange={(cid, o) => (setF({ ...f, companyId: cid }), setCompanyLabel(o?.label ?? null))} placeholder="General KB" />
           </FormField>
-          <FormField label="Visibility">
+          <FormField label="Visibility" hint={f.visibility === 'public' ? (f.companyId ? 'Clients of this company read it in the client portal (Documentation) once published.' : 'All clients read it in the client portal (Help articles) once published.') : 'Only the IT team sees it.'}>
             <Select
               value={f.visibility}
               onChange={(e) => setF({ ...f, visibility: e.target.value })}
               options={[
-                { value: 'internal', label: 'Internal' },
-                { value: 'public', label: 'Public' },
+                { value: 'internal', label: 'Internal (IT team only)' },
+                { value: 'public', label: 'Public (client portal)' },
               ]}
             />
           </FormField>

@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.6.0] — 2026-11-23
+
+### Added
+- **Client portal** (`/portal`, *Sign in as a client* on the sign-in page): contacts of your client companies sign in with their own account to
+  - open requests (subject, description, urgency, device, screenshots and files — pasted screenshots become attachments), reply and add files;
+  - follow their tickets: status, progress, who handles it, the solution, the conversation and the **work done** (date, technician, duration, description — never internal notes or rates);
+  - see **Work & hours** (hours per month, details per month) and, for managers, **contracts and remaining block hours**;
+  - see their **devices** and report a problem on one;
+  - read the company **documentation** the IT team shares and **write their own pages** (templates included); pages written by the IT team stay read-only;
+  - read help articles, change their password, language and theme.
+  Clients cannot change a ticket's status, solution or time.
+- Access levels per contact: **User** (own tickets) or **Company manager** (every ticket, work, devices and contracts of the company; the primary contact is always a manager).
+- **Invitations by e-mail**: the contact chooses their own password (link valid 7 days), or share a generated password.
+- **Administration → Client portal** (`/admin/portal`): turn the portal and each part on or off, welcome message, list of everybody with access and their access level, *Give a contact access*.
+- Ticket files: an **eye button** shares a file with the client portal; files uploaded by clients are marked *From client*.
+- Companies: **Documentation** tab listing IT and client-written pages and whether the client sees them.
+
+### Changed
+- The staff sign-in page says *Sign in to Taskora* (instead of the organization name).
+- Knowledge-base visibility is labelled *Internal (IT team only)* / *Public (client portal)*.
+- Markdown tables in documentation and articles have borders.
+
+### Upgrade notes
+- `bash scripts/update.sh`. Migration `0011_client_portal` only adds columns (`contacts.portal_role`, `attachments.portal_visible`, `attachments.uploaded_by_contact_id`, `kb_articles.portal_author_contact_id`, `kb_articles.portal_updated_by_contact_id`); no existing data is changed. Contacts who already had portal access keep it; existing ticket files stay hidden from clients until shared.
+
 ## [0.5.0] — 2026-11-22
 
 ### Added

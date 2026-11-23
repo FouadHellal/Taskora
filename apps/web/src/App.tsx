@@ -67,6 +67,7 @@ const AdminSystem = page(() => import('./pages/admin/system'));
 const AdminAudit = page(() => import('./pages/admin/audit'));
 const AdminImport = page(() => import('./pages/admin/import'));
 const AdminEmail = page(() => import('./pages/admin/email'));
+const AdminClientPortal = page(() => import('./pages/admin/client-portal'));
 const AdminBackups = page(() => import('./pages/admin/backups'));
 const SettingsHub = page(() => import('./pages/settings/index'));
 const Help = page(() => import('./pages/help/index'));
@@ -192,6 +193,7 @@ export function App() {
         {r('/admin/audit', AdminAudit, 'audit.read')}
         {r('/admin/import', AdminImport, 'companies.write')}
         {r('/admin/email', AdminEmail, 'settings.manage')}
+        {r('/admin/portal', AdminClientPortal, 'companies.read')}
         {r('/admin/backups', AdminBackups, 'backups.manage')}
         {r('/settings', SettingsHub)}
         {r('/help', Help)}

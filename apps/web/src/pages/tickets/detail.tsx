@@ -1289,6 +1289,8 @@ interface AttachmentRow {
   sizeBytes: number;
   createdAt: string;
   uploadedBy: string | null;
+  portalVisible?: boolean;
+  uploadedByContactId?: number | null;
 }
 
 export function Attachments({ entityType, entityId, canWrite, onChange }: { entityType: string; entityId: number; canWrite: boolean; onChange?: () => void }) {
@@ -1307,6 +1309,14 @@ export function Attachments({ entityType, entityId, canWrite, onChange }: { enti
   const remove = useMutation({
     mutationFn: (id: number) => api.delete(`/attachments/file/${id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['attachments', entityType, entityId] }),
+    onError: (e) => handleFormError(e),
+  });
+  const share = useMutation({
+    mutationFn: ({ id, portalVisible }: { id: number; portalVisible: boolean }) => api.patch(`/attachments/file/${id}/portal`, { portalVisible }),
+    onSuccess: (_r, v) => {
+      toast.success(v.portalVisible ? 'Shared with the client portal' : 'Hidden from the client portal');
+      qc.invalidateQueries({ queryKey: ['attachments', entityType, entityId] });
+    },
     onError: (e) => handleFormError(e),
   });
   return (
@@ -1353,6 +1363,23 @@ export function Attachments({ entityType, entityId, canWrite, onChange }: { enti
               <span className="text-xs text-muted">
                 {f.uploadedBy} · {fmtRelative(f.createdAt)}
               </span>
+              {entityType === 'ticket' &&
+                (f.uploadedByContactId ? (
+                  <Badge tone="info">From client</Badge>
+                ) : canWrite ? (
+                  <Button
+                    size="icon-sm"
+                    variant="ghost"
+                    className={f.portalVisible ? 'text-primary' : undefined}
+                    onClick={() => share.mutate({ id: f.id, portalVisible: !f.portalVisible })}
+                    aria-label={f.portalVisible ? 'Visible in the client portal (click to hide)' : 'Hidden from the client portal (click to share)'}
+                    title={f.portalVisible ? 'Visible in the client portal (click to hide)' : 'Hidden from the client portal (click to share)'}
+                  >
+                    {f.portalVisible ? <Eye /> : <EyeOff />}
+                  </Button>
+                ) : f.portalVisible ? (
+                  <Badge tone="primary">Shared</Badge>
+                ) : null)}
               {canWrite && (
                 <Button size="icon-sm" variant="ghost" onClick={() => remove.mutate(f.id)} aria-label="Delete file">
                   <Trash2 />

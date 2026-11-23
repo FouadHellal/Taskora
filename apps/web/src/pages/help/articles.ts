@@ -202,6 +202,39 @@ The full endpoint list is in \`docs/api.md\` and a step-by-step guide in \`docs/
 `,
   },
   {
+    slug: 'client-portal',
+    title: 'Client portal',
+    group: 'Customers & assets',
+    summary: 'Let your clients open requests, follow their tickets, see the work done and keep their documentation.',
+    body: `
+The **client portal** is a separate, simpler website for the contacts of your client companies, at \`/portal\` on your Taskora address. The sign-in page has a **Sign in as a client** button; IT staff keep signing in as before.
+
+### Give a client access
+1. Open the **contact** (it must belong to one of your companies and have an e-mail address).
+2. In the **Client portal** card choose the **access level**, then:
+   - **Invite by e-mail**: the contact receives a link (valid 7 days) to choose their own password. Needs [outgoing e-mail](/admin/email).
+   - **Grant access with a password**: Taskora shows a password once; share it securely.
+3. Or use [Administration → Client portal](/admin/portal) → **Give a contact access**, where you also see everybody who has access.
+
+### Access levels
+- **User**: sees the requests they opened and the devices assigned to them.
+- **Company manager**: sees every ticket of the company, the work done, the devices and the contracts (remaining hours). The company's **primary contact** is always a manager.
+
+### What clients can do
+- Open a **new request** (subject, description, urgency, device, screenshots and files), **reply** and add files. A reply on a *waiting* or *resolved* ticket reopens it.
+- See the **status**, who handles it, the **solution** and the **work done** (date, technician, duration and the time entry description — never internal notes or rates).
+- **Work & hours**: hours per month and, for managers, contract balances.
+- **Documentation**: read the pages you share and write their own (office, suppliers, procedures…).
+- They **cannot** change the status, the solution, the time or anything else on a ticket.
+
+### What the IT team does
+- Customer-visible notes (*Public* visibility) appear in the portal conversation; internal notes never do.
+- Files on a ticket are hidden from the client until you click the **eye** button next to the file. Files the client uploaded are marked *From client*.
+- Company documentation pages with visibility **Public (client portal)** and status *Published* are shown to that company. Pages clients write appear in the company's **Documentation** tab, marked *Written by the client*.
+- Choose what the portal shows (work, devices, contracts, documentation, priority, attachments) and a welcome message in [Administration → Client portal](/admin/portal).
+`,
+  },
+  {
     slug: 'deleting',
     title: 'Deleting records',
     group: 'Administration',

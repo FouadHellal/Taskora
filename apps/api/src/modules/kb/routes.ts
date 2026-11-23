@@ -48,6 +48,7 @@ export async function kbRoutes(app: FastifyInstance) {
         status: s.kbArticles.status,
         views: s.kbArticles.views,
         authorName: sql<string | null>`${s.users.firstName} || ' ' || ${s.users.lastName}`,
+        portalAuthorName: sql<string | null>`(select c.first_name || ' ' || c.last_name from contacts c where c.id = ${s.kbArticles.portalAuthorContactId})`,
         updatedAt: s.kbArticles.updatedAt,
       })
       .from(s.kbArticles)

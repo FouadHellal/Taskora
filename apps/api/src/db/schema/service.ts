@@ -711,6 +711,9 @@ export const kbArticles = pgTable(
     status: text('status').notNull().default('draft'),
     authorId: integer('author_id').references(() => users.id, { onDelete: 'set null' }),
     updatedById: integer('updated_by_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Company documentation written in the client portal: the contact who created / last changed it. */
+    portalAuthorContactId: integer('portal_author_contact_id').references(() => contacts.id, { onDelete: 'set null' }),
+    portalUpdatedByContactId: integer('portal_updated_by_contact_id').references(() => contacts.id, { onDelete: 'set null' }),
     views: integer('views').notNull().default(0),
     publishedAt: timestamp('published_at', { withTimezone: true }),
     createdAt: createdAt(),

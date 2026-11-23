@@ -88,6 +88,8 @@ export const contacts = pgTable(
     portalLastLoginAt: timestamp('portal_last_login_at', { withTimezone: true }),
     portalResetTokenHash: text('portal_reset_token_hash'),
     portalResetExpiresAt: timestamp('portal_reset_expires_at', { withTimezone: true }),
+    /** 'user' sees their own tickets; 'manager' sees every ticket, the work and the contracts of the company (primary contacts always do). */
+    portalRole: text('portal_role').notNull().default('user'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

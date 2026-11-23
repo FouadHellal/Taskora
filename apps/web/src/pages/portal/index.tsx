@@ -1,89 +1,219 @@
-import { useState } from 'react';
-import { Link, Navigate, Route, Routes, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useState, type ReactNode } from 'react';
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, BookOpen, LogOut, Plus, Ticket } from 'lucide-react';
+import { BookOpen, Building2, Clock, FileText, HardDrive, Home, LogOut, Menu, Plus, Ticket, UserRound, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { fmtDateTime, fmtRelative } from '@/lib/utils';
+import { isLang, loadLanguage, setLanguage, translate as t, type Lang } from '@/lib/i18n';
+import { cn, setDateConfig } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Input, Label, Textarea } from '@/components/ui/input';
-import { Card, CardBody, CardHeader, EmptyState, PageLoader } from '@/components/ui/misc';
-import { StatusBadge } from '@/components/badges';
-import { Markdown } from '@/components/kb/markdown';
-import { PORTAL_IMAGE_URL_RE } from '@taskora/shared';
-import { NoteBody } from '@/components/tickets/note-body';
+import { Input, Label } from '@/components/ui/input';
+import { PageLoader } from '@/components/ui/misc';
+import { logoUrl } from '@/components/logo';
+import { papi, setPortalCsrf, storedPortalLanguage, storePortalLanguage, usePortalMe, type Me } from './lib';
 
-/** Pasted images are served to the portal by its own image endpoint. */
-const PORTAL_IMAGES = [PORTAL_IMAGE_URL_RE];
+const PortalHome = lazy(() => import('./home'));
+const PortalTickets = lazy(() => import('./tickets'));
+const PortalWork = lazy(() => import('./work'));
+const PortalDevices = lazy(() => import('./devices'));
+const PortalDocs = lazy(() => import('./docs'));
+const PortalProfile = lazy(() => import('./profile'));
 
-/* Minimal client for the separate portal API realm (own cookie + CSRF). */
-let portalCsrf: string | null = null;
-async function papi<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`/api/portal${path}`, {
-    method,
-    credentials: 'same-origin',
-    headers: { ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...(method !== 'GET' && portalCsrf ? { 'x-csrf-token': portalCsrf } : {}) },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const data = res.status === 204 ? null : await res.json().catch(() => null);
-  if (!res.ok) throw new Error(data?.error?.message ?? res.statusText);
-  return data as T;
+/* ------------------------------------------------------------------ language */
+
+const LangContext = createContext<{ lang: Lang; change: (l: Lang | null) => void }>({ lang: 'en', change: () => {} });
+export const usePortalLanguage = () => useContext(LangContext);
+
+function browserLanguage(): Lang | null {
+  for (const l of navigator.languages ?? [navigator.language]) {
+    const code = l?.slice(0, 2).toLowerCase();
+    if (isLang(code)) return code;
+  }
+  return null;
 }
 
-interface Me {
-  contact: { firstName: string; lastName: string; email: string; companyName: string; seesCompanyTickets: boolean } | null;
-  organizationName?: string;
-  csrfToken?: string;
+/** The portal has its own language choice: saved in this browser, else the browser language, else the organization default. */
+function PortalI18n({ orgLanguage, children }: { orgLanguage?: string; children: ReactNode }) {
+  const [choice, setChoice] = useState<string | null>(storedPortalLanguage());
+  const wanted: Lang = isLang(choice) ? choice : (browserLanguage() ?? (isLang(orgLanguage) ? orgLanguage : 'en'));
+  const [active, setActive] = useState<Lang | null>(wanted === 'en' ? 'en' : null);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadLanguage(wanted)
+      .catch(() => ({}))
+      .then((d) => {
+        if (cancelled) return;
+        setLanguage(wanted, d);
+        setActive(wanted);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wanted]);
+
+  if (!active) return <PageLoader />;
+  setLanguage(active);
+  setDateConfig({ locale: active, dateFormat: 'auto' });
+  return (
+    <LangContext.Provider
+      value={{
+        lang: active,
+        change: (l) => {
+          storePortalLanguage(l);
+          setChoice(l);
+        },
+      }}
+    >
+      <Fragment key={active}>{children}</Fragment>
+    </LangContext.Provider>
+  );
 }
 
-function usePortalMe() {
-  return useQuery({
-    queryKey: ['portal-me'],
-    queryFn: async () => {
-      const me = await papi<Me>('GET', '/me');
-      portalCsrf = me.csrfToken ?? null;
-      return me;
-    },
-    retry: false,
-  });
-}
+/* --------------------------------------------------------------------- shell */
 
-function Shell({ me, children }: { me: Me; children: React.ReactNode }) {
+function Shell({ me, children }: { me: Me; children: ReactNode }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [menu, setMenu] = useState(false);
+  const f = me.features!;
+  const c = me.contact!;
+  useEffect(() => setMenu(false), [location.pathname]);
+
+  const nav = [
+    { to: '/portal', label: 'Home', icon: Home, end: true },
+    { to: '/portal/tickets', label: c.isManager ? 'Tickets' : 'My tickets', icon: Ticket },
+    f.time && { to: '/portal/work', label: 'Work & hours', icon: Clock },
+    f.devices && { to: '/portal/devices', label: c.isManager ? 'Devices' : 'My devices', icon: HardDrive },
+    f.docs && { to: '/portal/docs', label: 'Documentation', icon: FileText },
+    { to: '/portal/kb', label: 'Help articles', icon: BookOpen },
+    { to: '/portal/profile', label: 'My account', icon: UserRound },
+  ].filter(Boolean) as { to: string; label: string; icon: typeof Home; end?: boolean }[];
+
+  const signOut = async () => {
+    await papi('POST', '/logout').catch(() => null);
+    setPortalCsrf(null);
+    qc.removeQueries({ queryKey: ['portal-me'] });
+    navigate('/portal/login');
+  };
+
+  const logo = logoUrl('organization', 0, me.logoUpdatedAt);
+  const sidebar = (
+    <div className="flex h-full flex-col">
+      <Link to="/portal" className="flex items-center gap-2.5 px-4 pb-3 pt-4">
+        <img src={logo ?? '/favicon.svg'} alt="" className={logo ? 'h-8 max-w-32 object-contain' : 'size-7'} />
+        <div className="min-w-0 leading-tight">
+          <div className="truncate text-[13px] font-semibold">{me.organizationName}</div>
+          <div className="text-[11px] text-muted">{t('Client portal')}</div>
+        </div>
+      </Link>
+      <div className="mx-3 mb-3 flex items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-2">
+        <Building2 className="size-4 shrink-0 text-primary" />
+        <div className="min-w-0 leading-tight">
+          <div className="truncate text-[12px] font-medium">{c.companyName}</div>
+          <div className="text-[11px] text-muted">{c.isManager ? t('Company manager') : t('User')}</div>
+        </div>
+      </div>
+      <div className="px-3 pb-2">
+        <Button variant="primary" className="w-full" onClick={() => navigate('/portal/tickets/new')}>
+          <Plus /> New request
+        </Button>
+      </div>
+      <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
+        {nav.map((n) => (
+          <NavLink
+            key={n.to}
+            to={n.to}
+            end={n.end}
+            className={({ isActive }) =>
+              cn('flex items-center gap-2.5 rounded-md px-2.5 py-2 text-[13px] text-muted transition-colors hover:bg-surface-2 hover:text-foreground', isActive && 'bg-primary-soft font-medium text-primary hover:bg-primary-soft hover:text-primary')
+            }
+          >
+            <n.icon className="size-4" /> {t(n.label)}
+          </NavLink>
+        ))}
+      </nav>
+      <div className="border-t border-border p-3">
+        <div className="mb-2 truncate text-[12px]">
+          <div className="truncate font-medium">
+            {c.firstName} {c.lastName}
+          </div>
+          <div className="truncate text-[11px] text-muted">{c.email}</div>
+        </div>
+        <Button size="sm" variant="ghost" className="w-full justify-start" onClick={signOut}>
+          <LogOut /> Sign out
+        </Button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b border-border bg-surface">
-        <div className="mx-auto flex min-h-14 max-w-5xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
-          <Link to="/portal" className="flex min-w-0 items-center gap-2 font-semibold">
-            <img src="/favicon.svg" alt="" className="size-6 shrink-0" /> <span className="truncate">{me.organizationName} Support</span>
-          </Link>
-          <nav className="order-last flex w-full gap-1 text-[13px] sm:order-none sm:w-auto">
-            <Link to="/portal" className="rounded px-2 py-1 hover:bg-surface-2">
-              My tickets
-            </Link>
-            <Link to="/portal/kb" className="rounded px-2 py-1 hover:bg-surface-2">
-              Knowledge base
-            </Link>
-          </nav>
-          <div className="ml-auto flex items-center gap-2 text-[13px] sm:gap-3">
-            <span className="hidden text-muted sm:inline">
-              {me.contact?.firstName} {me.contact?.lastName} · {me.contact?.companyName}
-            </span>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={async () => {
-                await papi('POST', '/logout');
-                qc.removeQueries({ queryKey: ['portal-me'] });
-                navigate('/portal/login');
-              }}
-            >
-              <LogOut /> <span className="hidden sm:inline">Sign out</span>
-            </Button>
+      {/* Desktop sidebar */}
+      <aside className="fixed inset-y-0 left-0 hidden w-60 border-r border-border bg-surface md:block">{sidebar}</aside>
+      {/* Phone: top bar + slide-in menu */}
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface px-3 md:hidden">
+        <Button variant="ghost" size="sm" aria-label={t('Menu')} onClick={() => setMenu(true)}>
+          <Menu />
+        </Button>
+        <Link to="/portal" className="min-w-0 flex-1 truncate text-[14px] font-semibold">
+          {me.organizationName}
+        </Link>
+        <Button size="sm" variant="primary" onClick={() => navigate('/portal/tickets/new')} aria-label={t('New request')}>
+          <Plus />
+        </Button>
+      </header>
+      {menu && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMenu(false)} />
+          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-surface shadow-xl">
+            <button className="absolute right-2 top-3 cursor-pointer rounded p-1 text-muted hover:text-foreground" aria-label={t('Close')} onClick={() => setMenu(false)}>
+              <X className="size-4" />
+            </button>
+            {sidebar}
+          </aside>
+        </div>
+      )}
+      <main className="md:pl-60">
+        <div className="mx-auto max-w-5xl p-4 sm:p-6">
+          <Suspense fallback={<PageLoader />}>{children}</Suspense>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------- sign-in pages */
+
+function PortalAuthCard({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
+  const info = useQuery({ queryKey: ['portal-info'], queryFn: () => papi<{ organizationName: string; logoUpdatedAt: string | null; enabled: boolean }>('GET', '/info') });
+  const logo = logoUrl('organization', 0, info.data?.logoUpdatedAt);
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+      <div className="w-full max-w-sm">
+        <div className="mb-6 flex flex-col items-center gap-2 text-center">
+          <img src={logo ?? '/favicon.svg'} alt="" className={logo ? 'h-12 max-w-48 object-contain' : 'size-9'} />
+          <div>
+            <div className="text-lg font-semibold tracking-tight">{info.data?.organizationName ?? 'Taskora'}</div>
+            <div className="text-[12px] text-muted">{t('Client portal')}</div>
           </div>
         </div>
-      </header>
-      <main className="mx-auto max-w-5xl p-4">{children}</main>
+        <div className="rounded-xl border border-border bg-surface p-6 shadow-card">
+          <h1 className="text-base font-semibold">{t(title)}</h1>
+          {subtitle && <p className="mt-1 text-[13px] text-muted">{t(subtitle)}</p>}
+          {info.data && !info.data.enabled ? (
+            <p className="mt-4 rounded-md bg-warning-soft px-3 py-2 text-xs text-warning">{t('The client portal is currently turned off. Please contact your IT team.')}</p>
+          ) : (
+            <div className="mt-5">{children}</div>
+          )}
+        </div>
+        <p className="mt-4 text-center text-[12px] text-muted">
+          {t('IT team?')}{' '}
+          <Link to="/login" className="text-primary hover:underline">
+            {t('Staff sign-in')}
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }
@@ -94,306 +224,158 @@ function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [forgot, setForgot] = useState(false);
   const login = useMutation({
     mutationFn: () => papi<{ csrfToken: string }>('POST', '/login', { email, password }),
     onSuccess: async (r) => {
-      portalCsrf = r.csrfToken;
+      setPortalCsrf(r.csrfToken);
       await qc.invalidateQueries({ queryKey: ['portal-me'] });
       navigate('/portal');
     },
     onError: (e) => setError((e as Error).message),
   });
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm p-6">
-        <h1 className="text-base font-semibold">Customer support portal</h1>
-        <p className="mt-1 text-[13px] text-muted">Sign in to follow your tickets and request help.</p>
+  const reset = useMutation({
+    mutationFn: () => papi('POST', '/forgot-password', { email }),
+    onSuccess: () => {
+      toast.success(t('If an account exists for this address, we sent you a link to choose a new password.'));
+      setForgot(false);
+    },
+    onError: (e) => setError((e as Error).message),
+  });
+
+  if (forgot)
+    return (
+      <PortalAuthCard title="Forgot your password?" subtitle="Enter your e-mail address and we will send you a link to choose a new one.">
         <form
-          className="mt-5 space-y-3"
+          className="space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
             setError('');
-            login.mutate();
+            reset.mutate();
           }}
         >
           <div>
-            <Label htmlFor="pemail">E-mail</Label>
-            <Input id="pemail" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
-          </div>
-          <div>
-            <Label htmlFor="ppass">Password</Label>
-            <Input id="ppass" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+            <Label htmlFor="femail">E-mail</Label>
+            <Input id="femail" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
           </div>
           {error && <p className="rounded bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
-          <Button type="submit" variant="primary" className="w-full" size="lg" loading={login.isPending}>
-            Sign in
+          <Button type="submit" variant="primary" className="w-full" size="lg" loading={reset.isPending}>
+            Send the link
           </Button>
-          <button
-            type="button"
-            className="w-full cursor-pointer text-center text-xs text-muted hover:text-foreground"
-            onClick={async () => {
-              if (!email) return setError('Enter your e-mail address first');
-              await papi('POST', '/forgot-password', { email });
-              toast.success('If an account exists, a reset link has been sent to your e-mail.');
-            }}
-          >
-            Forgot your password?
+          <button type="button" className="w-full cursor-pointer text-center text-xs text-muted hover:text-foreground" onClick={() => setForgot(false)}>
+            {t('Back to sign-in')}
           </button>
         </form>
-      </Card>
-    </div>
-  );
-}
+      </PortalAuthCard>
+    );
 
-interface PTicket {
-  id: number;
-  ticketNumber: string;
-  title: string;
-  statusName: string;
-  statusColor: string;
-  statusCategory: string;
-  priorityName: string;
-  contactName: string | null;
-  createdAt: string;
-  lastActivityAt: string;
-}
-
-function TicketList({ me }: { me: Me }) {
-  const [state, setState] = useState('open');
-  const [creating, setCreating] = useState(false);
-  const q = useQuery({ queryKey: ['portal-tickets', state], queryFn: () => papi<{ data: PTicket[] }>('GET', `/tickets?state=${state}`) });
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h1 className="text-lg font-semibold">{me.contact?.seesCompanyTickets ? `${me.contact.companyName} tickets` : 'My tickets'}</h1>
-        <div className="ml-auto flex gap-1">
-          {['open', 'closed', 'all'].map((s) => (
-            <Button key={s} size="sm" variant={state === s ? 'subtle' : 'ghost'} onClick={() => setState(s)}>
-              {s === 'open' ? 'Open' : s === 'closed' ? 'Resolved' : 'All'}
-            </Button>
-          ))}
-          <Button variant="primary" onClick={() => setCreating(true)}>
-            <Plus /> New request
-          </Button>
+    <PortalAuthCard title="Sign in as a client" subtitle="Open requests, follow your tickets, see the work done and keep your documentation.">
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError('');
+          login.mutate();
+        }}
+      >
+        <div>
+          <Label htmlFor="pemail">E-mail</Label>
+          <Input id="pemail" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
         </div>
-      </div>
-      {creating && <NewTicket onDone={() => setCreating(false)} />}
-      <Card>
-        {q.isLoading ? (
-          <PageLoader />
-        ) : !q.data?.data.length ? (
-          <EmptyState icon={<Ticket />} title="No tickets" description="Use “New request” to ask for help." />
-        ) : (
-          <ul className="divide-y divide-border">
-            {q.data.data.map((t) => (
-              <li key={t.id}>
-                <Link to={`/portal/tickets/${t.id}`} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 hover:bg-surface-2 sm:flex-nowrap">
-                  <span className="font-mono text-xs text-muted">{t.ticketNumber}</span>
-                  <span className="order-first min-w-0 basis-full text-[14px] font-medium sm:order-none sm:flex-1 sm:basis-0 sm:truncate sm:text-[13px]">{t.title}</span>
-                  {me.contact?.seesCompanyTickets && <span className="text-xs text-muted">{t.contactName}</span>}
-                  <StatusBadge name={t.statusName} color={t.statusColor} />
-                  <span className="ml-auto text-right text-xs text-muted sm:ml-0 sm:w-28">{fmtRelative(t.lastActivityAt)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-function NewTicket({ onDone }: { onDone: () => void }) {
-  const qc = useQueryClient();
-  const navigate = useNavigate();
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const create = useMutation({
-    mutationFn: () => papi<{ id: number; ticketNumber: string }>('POST', '/tickets', { title, description }),
-    onSuccess: (t) => {
-      toast.success(`Request ${t.ticketNumber} created`);
-      qc.invalidateQueries({ queryKey: ['portal-tickets'] });
-      onDone();
-      navigate(`/portal/tickets/${t.id}`);
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-  return (
-    <Card>
-      <CardHeader title="New request" />
-      <CardBody className="space-y-3">
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Short summary, e.g. “Outlook does not open”" />
-        <Textarea rows={5} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What happens, since when, error messages, how urgent…" />
-        <div className="flex gap-2">
-          <Button onClick={onDone}>Cancel</Button>
-          <Button variant="primary" disabled={title.trim().length < 3} loading={create.isPending} onClick={() => create.mutate()}>
-            Submit request
-          </Button>
+        <div>
+          <Label htmlFor="ppass">Password</Label>
+          <Input id="ppass" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
         </div>
-      </CardBody>
-    </Card>
-  );
-}
-
-function TicketView() {
-  const id = Number(useParams().id);
-  const qc = useQueryClient();
-  const [reply, setReply] = useState('');
-  const q = useQuery({
-    queryKey: ['portal-ticket', id],
-    queryFn: () =>
-      papi<PTicket & { description: string | null; resolution: string | null; notes: { id: number; body: string; author: string | null; fromCustomer: boolean; createdAt: string }[] }>('GET', `/tickets/${id}`),
-  });
-  const send = useMutation({
-    mutationFn: () => papi('POST', `/tickets/${id}/replies`, { body: reply }),
-    onSuccess: () => {
-      setReply('');
-      qc.invalidateQueries({ queryKey: ['portal-ticket', id] });
-      toast.success('Reply sent');
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
-  if (q.isLoading) return <PageLoader />;
-  if (!q.data) return <EmptyState title="Ticket not found" />;
-  const t = q.data;
-  return (
-    <div className="space-y-4">
-      <Link to="/portal" className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground">
-        <ArrowLeft className="size-3" /> Back to tickets
-      </Link>
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-lg font-semibold">{t.title}</h1>
-        <StatusBadge name={t.statusName} color={t.statusColor} />
-        <span className="font-mono text-xs text-muted">{t.ticketNumber}</span>
-      </div>
-      {t.description && (
-        <Card>
-          <CardBody>
-            <NoteBody text={t.description} allow={PORTAL_IMAGES} className="text-[13px]" />
-          </CardBody>
-        </Card>
-      )}
-      {t.resolution && (
-        <Card className="border-success/40">
-          <CardHeader title="Resolution" />
-          <CardBody>
-            <NoteBody text={t.resolution} allow={PORTAL_IMAGES} className="text-[13px]" />
-          </CardBody>
-        </Card>
-      )}
-      <div className="space-y-2">
-        {t.notes.map((n) => (
-          <div key={n.id} className={n.fromCustomer ? 'ml-12 rounded-md border border-border bg-surface-2 p-3' : 'mr-12 rounded-md border border-primary/30 bg-primary-soft/30 p-3'}>
-            <div className="mb-1 text-[11px] text-muted">
-              {n.fromCustomer ? 'You / your colleague' : (n.author ?? 'Support')} · {fmtDateTime(n.createdAt)}
-            </div>
-            <NoteBody text={n.body} allow={PORTAL_IMAGES} className="text-[13px]" />
-          </div>
-        ))}
-      </div>
-      <Card>
-        <CardBody className="space-y-2">
-          <Textarea rows={3} value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Write a reply…" />
-          <Button variant="primary" disabled={!reply.trim()} loading={send.isPending} onClick={() => send.mutate()}>
-            Send reply
-          </Button>
-        </CardBody>
-      </Card>
-    </div>
-  );
-}
-
-function KnowledgeBase() {
-  const [q, setQ] = useState('');
-  const [open, setOpen] = useState<number | null>(null);
-  const list = useQuery({ queryKey: ['portal-kb', q], queryFn: () => papi<{ data: { id: number; title: string; excerpt: string }[] }>('GET', `/kb?q=${encodeURIComponent(q)}`) });
-  const article = useQuery({ queryKey: ['portal-kb-article', open], queryFn: () => papi<{ title: string; body: string }>('GET', `/kb/${open}`), enabled: open !== null });
-  return (
-    <div className="space-y-4">
-      <h1 className="text-lg font-semibold">Knowledge base</h1>
-      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search articles…" />
-      {open !== null && article.data ? (
-        <Card>
-          <CardHeader title={article.data.title} actions={<Button size="sm" variant="ghost" onClick={() => setOpen(null)}>Back</Button>} />
-          <CardBody>
-            <Markdown source={article.data.body} />
-          </CardBody>
-        </Card>
-      ) : (
-        <div className="space-y-2">
-          {(list.data?.data ?? []).length === 0 && <EmptyState icon={<BookOpen />} title="No articles found" />}
-          {list.data?.data.map((a) => (
-            <Card key={a.id} className="cursor-pointer p-4 hover:border-border-strong" onClick={() => setOpen(a.id)}>
-              <div className="text-[14px] font-medium">{a.title}</div>
-              <p className="mt-1 line-clamp-2 text-xs text-muted">{a.excerpt}</p>
-            </Card>
-          ))}
-        </div>
-      )}
-    </div>
+        {error && <p className="rounded bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
+        <Button type="submit" variant="primary" className="w-full" size="lg" loading={login.isPending}>
+          Sign in
+        </Button>
+        <button type="button" className="w-full cursor-pointer text-center text-xs text-muted hover:text-foreground" onClick={() => setForgot(true)}>
+          {t('Forgot your password?')}
+        </button>
+      </form>
+    </PortalAuthCard>
   );
 }
 
 function ResetPassword() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
+  const invite = params.get('invite') === '1';
   const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
   const [error, setError] = useState('');
   const reset = useMutation({
     mutationFn: () => papi('POST', '/reset-password', { token: params.get('token') ?? '', password }),
     onSuccess: () => {
-      toast.success('Password changed — you can sign in now');
+      toast.success(t('Password saved — you can sign in now'));
       navigate('/portal/login');
     },
     onError: (e) => setError((e as Error).message),
   });
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm p-6">
-        <h1 className="text-base font-semibold">Choose a new password</h1>
-        <form
-          className="mt-4 space-y-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            reset.mutate();
-          }}
-        >
-          <Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 10 characters" />
-          {error && <p className="rounded bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
-          <Button type="submit" variant="primary" className="w-full" disabled={password.length < 10} loading={reset.isPending}>
-            Save password
-          </Button>
-        </form>
-      </Card>
-    </div>
+    <PortalAuthCard title={invite ? 'Welcome! Choose your password' : 'Choose a new password'} subtitle={invite ? 'You will use it with your e-mail address to sign in to the client portal.' : undefined}>
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setError('');
+          reset.mutate();
+        }}
+      >
+        <div>
+          <Label htmlFor="np1">New password</Label>
+          <Input id="np1" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('At least 10 characters')} autoFocus />
+        </div>
+        <div>
+          <Label htmlFor="np2">Repeat the password</Label>
+          <Input id="np2" type="password" autoComplete="new-password" value={password2} onChange={(e) => setPassword2(e.target.value)} />
+          {password2 && password !== password2 && <p className="mt-1 text-xs text-danger">{t('The passwords do not match')}</p>}
+        </div>
+        {error && <p className="rounded bg-danger-soft px-3 py-2 text-xs text-danger">{error}</p>}
+        <Button type="submit" variant="primary" className="w-full" size="lg" disabled={password.length < 10 || password !== password2} loading={reset.isPending}>
+          Save password
+        </Button>
+      </form>
+    </PortalAuthCard>
   );
 }
 
-/** Customer portal, mounted at /portal/* outside the staff application. */
-export default function PortalApp() {
+/* -------------------------------------------------------------------- app */
+
+function Authenticated() {
   const me = usePortalMe();
+  if (me.isLoading) return <PageLoader />;
+  if (!me.data?.contact) return <Navigate to="/portal/login" replace />;
   return (
-    <Routes>
-      <Route path="login" element={<Login />} />
-      <Route path="reset" element={<ResetPassword />} />
-      <Route
-        path="*"
-        element={
-          me.isLoading ? (
-            <PageLoader />
-          ) : !me.data?.contact ? (
-            <Navigate to="/portal/login" replace />
-          ) : (
-            <Shell me={me.data}>
-              <Routes>
-                <Route index element={<TicketList me={me.data} />} />
-                <Route path="tickets/:id" element={<TicketView />} />
-                <Route path="kb" element={<KnowledgeBase />} />
-              </Routes>
-            </Shell>
-          )
-        }
-      />
-    </Routes>
+    <Shell me={me.data}>
+      <Routes>
+        <Route index element={<PortalHome me={me.data} />} />
+        <Route path="tickets/*" element={<PortalTickets me={me.data} />} />
+        {me.data.features?.time && <Route path="work" element={<PortalWork me={me.data} />} />}
+        {me.data.features?.devices && <Route path="devices" element={<PortalDevices me={me.data} />} />}
+        <Route path="docs/*" element={<PortalDocs me={me.data} kind="docs" />} />
+        <Route path="kb/*" element={<PortalDocs me={me.data} kind="kb" />} />
+        <Route path="profile" element={<PortalProfile me={me.data} />} />
+        <Route path="*" element={<Navigate to="/portal" replace />} />
+      </Routes>
+    </Shell>
   );
 }
+
+/** Client portal, mounted at /portal/* outside the staff application. */
+export default function PortalApp() {
+  const me = usePortalMe();
+  if (me.isLoading) return <PageLoader />;
+  return (
+    <PortalI18n orgLanguage={me.data?.language}>
+      <Routes>
+        <Route path="login" element={me.data?.contact ? <Navigate to="/portal" replace /> : <Login />} />
+        <Route path="reset" element={<ResetPassword />} />
+        <Route path="*" element={<Authenticated />} />
+      </Routes>
+    </PortalI18n>
+  );
+}
+

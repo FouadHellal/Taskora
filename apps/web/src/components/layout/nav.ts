@@ -210,6 +210,7 @@ export const NAV: NavSection[] = [
         icon: Users,
         children: [
           { label: 'Users & Roles', to: '/admin/users', icon: Users, perm: 'users.manage' },
+          { label: 'Client Portal', to: '/admin/portal', icon: Building2, perm: 'companies.read' },
           { label: 'Audit Logs', to: '/admin/audit', icon: ScrollText, perm: 'audit.read' },
         ],
       },

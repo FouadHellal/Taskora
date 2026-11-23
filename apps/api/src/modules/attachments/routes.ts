@@ -38,7 +38,10 @@ export async function attachmentRoutes(app: FastifyInstance) {
     const { entityType, entityId, def } = entityParams(req);
     assertCan(req, def.read);
     const rows = await app.db
-      .select({ file: s.attachments, uploadedBy: sql<string | null>`${s.users.firstName} || ' ' || ${s.users.lastName}` })
+      .select({
+        file: s.attachments,
+        uploadedBy: sql<string | null>`coalesce(${s.users.firstName} || ' ' || ${s.users.lastName}, (select c.first_name || ' ' || c.last_name || ' (client)' from contacts c where c.id = ${s.attachments.uploadedByContactId}))`,
+      })
       .from(s.attachments)
       .leftJoin(s.users, eq(s.users.id, s.attachments.uploadedById))
       .where(and(eq(s.attachments.entityType, entityType), eq(s.attachments.entityId, entityId)))

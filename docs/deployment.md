@@ -152,7 +152,11 @@ docker compose exec -e TASKORA_MIGRATION_PASSPHRASE='…' api node dist/cli/migr
 
 Not included: the `.env` file (set `PUBLIC_URL`, HTTPS and ports on the new server; it keeps its own `TASKORA_ENCRYPTION_KEY`), sign-in sessions and old backups. Point n8n and other tools that call Taskora at the new address.
 
-## 6. Action1
+## 6. Client portal
+
+Contacts of your client companies sign in at `https://<your-address>/portal` (also the **Sign in as a client** button on the sign-in page). Give access on a contact (**Client portal** card) or in **Administration → Client portal**: send an invitation e-mail (needs outgoing e-mail and `PUBLIC_URL` so the link points to the right address) or share a generated password. What clients see is set on the same page. Nothing else needs to be configured on the server.
+
+## 7. Action1
 
 Administration → Integrations → Action1: choose the region, enter an API client ID/secret (Action1 → API credentials), test the connection, map each Action1 organization to a Taskora company, enable the integration and run a sync. The worker then syncs on the configured interval. The integration only reads data from Action1.
 

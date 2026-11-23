@@ -146,6 +146,7 @@ export default function CompanyDetailPage() {
             <TabsTrigger value="locations" count={s?.counts.locations}>
               Locations
             </TabsTrigger>
+            <TabsTrigger value="docs">Documentation</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="notes">Notes & files</TabsTrigger>
           </TabsList>
@@ -308,6 +309,9 @@ export default function CompanyDetailPage() {
               <CompanyLocations companyId={id} />
             </Card>
           </TabsContent>
+          <TabsContent value="docs" className="mt-4">
+            <CompanyDocs companyId={id} canWrite={can('kb.write')} />
+          </TabsContent>
           <TabsContent value="activity" className="mt-4">
             <ActivityFeed companyId={id} canWrite={can('companies.write')} />
           </TabsContent>
@@ -381,6 +385,64 @@ export const contactColumns: Column<ContactRow & { companyName?: string; company
   { header: 'Devices', meta: { align: 'right' }, cell: ({ row }) => row.original.ciCount },
   { header: 'Open tickets', meta: { align: 'right', sortKey: 'openTickets' }, cell: ({ row }) => row.original.openTickets || <span className="text-subtle">0</span> },
 ];
+
+interface DocRow {
+  id: number;
+  articleNumber: string;
+  title: string;
+  visibility: string;
+  status: string;
+  authorName: string | null;
+  portalAuthorName: string | null;
+  updatedAt: string;
+}
+
+/** Company documentation: pages written by the IT team and by the client (client portal). */
+function CompanyDocs({ companyId, canWrite }: { companyId: number; canWrite: boolean }) {
+  const navigate = useNavigate();
+  const q = useQuery({ queryKey: ['kb-articles', 'company', companyId], queryFn: () => api.get<Paginated<DocRow>>('/kb/articles', { scope: 'docs', companyId, pageSize: 200 }) });
+  const columns: Column<DocRow>[] = [
+    {
+      id: 'title',
+      header: 'Title',
+      cell: ({ row }) => (
+        <Link to={`/kb/${row.original.id}`} onClick={(e) => e.stopPropagation()} className="font-medium text-primary hover:underline">
+          {row.original.title}
+        </Link>
+      ),
+    },
+    {
+      id: 'portal',
+      header: 'Client portal',
+      cell: ({ row }) =>
+        row.original.portalAuthorName ? (
+          <Badge tone="info">Written by the client</Badge>
+        ) : row.original.visibility === 'public' && row.original.status === 'published' ? (
+          <Badge tone="success">Visible</Badge>
+        ) : (
+          <Badge>Internal</Badge>
+        ),
+    },
+    { id: 'author', header: 'Author', cell: ({ row }) => row.original.portalAuthorName ?? row.original.authorName ?? '—' },
+    { id: 'updatedAt', header: 'Updated', cell: ({ row }) => fmtRelative(row.original.updatedAt) },
+  ];
+  return (
+    <Card>
+      <CardHeader
+        title="Documentation"
+        description="Pages marked Public are shown to this company in the client portal; clients can also add their own pages there."
+        actions={
+          canWrite && (
+            <Button size="sm" variant="primary" onClick={() => navigate(`/kb/new?companyId=${companyId}`)}>
+              <Plus /> New page
+            </Button>
+          )
+        }
+      />
+      <DataTable columns={columns} data={q.data?.data} loading={q.isLoading} onRowClick={(r) => navigate(`/kb/${r.id}`)} empty="No documentation yet" />
+    </Card>
+  );
+}
 
 function CompanyContacts({ companyId }: { companyId: number }) {
   const navigate = useNavigate();

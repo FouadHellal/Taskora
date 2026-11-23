@@ -22,6 +22,8 @@ interface ContactDetail extends ContactRecord {
   locationName: string | null;
   portalEnabled: boolean;
   portalLastLoginAt: string | null;
+  portalRole: string;
+  portalPasswordSet: boolean;
   createdAt: string;
   updatedAt: string;
 }

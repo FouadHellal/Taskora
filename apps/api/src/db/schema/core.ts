@@ -138,6 +138,10 @@ export const attachments = pgTable(
     storageKey: text('storage_key').notNull().unique(),
     sha256: text('sha256').notNull(),
     uploadedById: integer('uploaded_by_id').references(() => users.id, { onDelete: 'set null' }),
+    /** Set when a client uploaded the file through the client portal (contacts.id, no FK: core cannot import crm). */
+    uploadedByContactId: integer('uploaded_by_contact_id'),
+    /** Shown to the company's contacts in the client portal (always true for files they uploaded). */
+    portalVisible: boolean('portal_visible').notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [index('attachments_entity_idx').on(t.entityType, t.entityId)],

@@ -41,6 +41,22 @@ export const systemSettingsSchema = z.object({
   backupRetention: z.coerce.number().int().min(1).max(365).default(7),
   /** Set when the organization logo changes; used to bust the browser cache. */
   logoUpdatedAt: z.string().nullable().default(null),
+  /* Client portal (/portal): what the companies' contacts can see and do. */
+  portalEnabled: z.boolean().default(true),
+  /** Shown on the client portal home page (Markdown). */
+  portalWelcome: z.string().max(4000).default(''),
+  /** Show who worked on a ticket, when and how long (time entry descriptions, never internal notes). */
+  portalShowTime: z.boolean().default(true),
+  /** Show the company's devices (configuration items). */
+  portalShowDevices: z.boolean().default(true),
+  /** Show contracts and hour-block balances to portal managers. */
+  portalShowContracts: z.boolean().default(true),
+  /** Let contacts write and edit their company documentation. */
+  portalAllowDocs: z.boolean().default(true),
+  /** Let contacts choose the priority of a new request. */
+  portalAllowPriority: z.boolean().default(true),
+  /** Let contacts attach files to their requests. */
+  portalAllowAttachments: z.boolean().default(true),
 });
 export type SystemSettings = z.infer<typeof systemSettingsSchema>;
 

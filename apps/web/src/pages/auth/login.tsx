@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Building2 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError, setCsrfToken } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -58,7 +59,7 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthCard title={t('Sign in to {name}', { name: setup.data?.organizationName ?? 'Taskora' })} logo={logoUrl('organization', 0, setup.data?.logoUpdatedAt)}>
+    <AuthCard title="Sign in to Taskora" subtitle="IT team sign-in" logo={logoUrl('organization', 0, setup.data?.logoUpdatedAt)}>
       <form onSubmit={submit} className="space-y-3">
         <div>
           <Label htmlFor="email">E-mail</Label>
@@ -73,6 +74,16 @@ export default function LoginPage() {
           Sign in
         </Button>
       </form>
+      <div className="my-4 flex items-center gap-3 text-[11px] uppercase tracking-wide text-subtle">
+        <span className="h-px flex-1 bg-border" /> {t('or')} <span className="h-px flex-1 bg-border" />
+      </div>
+      <Link
+        to="/portal/login"
+        className="flex w-full items-center justify-center gap-2 rounded-md border border-border bg-surface-2 px-3 py-2.5 text-[13px] font-medium hover:border-border-strong hover:bg-surface"
+      >
+        <Building2 className="size-4 text-primary" /> {t('Sign in as a client')}
+      </Link>
+      <p className="mt-2 text-center text-[11px] text-subtle">{t('Clients: open requests, follow your tickets and keep your documentation.')}</p>
     </AuthCard>
   );
 }
