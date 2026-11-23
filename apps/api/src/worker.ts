@@ -96,7 +96,7 @@ async function schedule(db: Db) {
     .select()
     .from(integrations)
     .where(and(eq(integrations.provider, 'omada'), eq(integrations.enabled, true), lte(integrations.nextSyncAt, new Date())));
-  if (omada) await enqueue(db, 'omada.sync', { trigger: 'scheduled' }, { dedupeKey: 'omada.sync', maxAttempts: 2 });
+  if (omada && (omada.config as { mode?: string }).mode === 'direct') await enqueue(db, 'omada.sync', { trigger: 'scheduled' }, { dedupeKey: 'omada.sync', maxAttempts: 2 });
 }
 
 async function main() {

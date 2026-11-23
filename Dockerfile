@@ -119,6 +119,8 @@ COPY apps/api/package.json ./package.json
 # dist/ and drizzle/ are siblings: migrationsFolder() resolves ../drizzle from
 # dist/ and ../../drizzle from dist/db/.
 COPY apps/api/drizzle ./drizzle
+# Omada site agent and its installers, downloadable from Taskora.
+COPY apps/api/agents ./agents
 COPY --from=build-api /src/apps/api/dist ./dist
 COPY --chmod=0755 deploy/docker-entrypoint.sh /usr/local/bin/taskora-entrypoint
 

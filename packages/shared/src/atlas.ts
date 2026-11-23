@@ -10,6 +10,7 @@ import { z } from 'zod';
 export const INTEGRATION_SCOPES = {
   'atlas.incidents': 'Send atlas incidents (create/update the linked ticket) and read their ticket events',
   'atlas.cmdb': 'Send atlas inventory for configuration item reconciliation',
+  'omada.agent': 'Omada site agent: read its settings and send the Omada sites, devices and clients',
 } as const;
 export type IntegrationScope = keyof typeof INTEGRATION_SCOPES;
 export const INTEGRATION_SCOPE_KEYS = Object.keys(INTEGRATION_SCOPES) as [IntegrationScope, ...IntegrationScope[]];

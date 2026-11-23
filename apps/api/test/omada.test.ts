@@ -114,7 +114,7 @@ describe('Omada integration', () => {
     const ciType = (name: string) => lookups.ciTypes.find((t: { name: string }) => t.name === name).id;
     const existing = (await admin.post('/api/v1/configuration-items', { name: 'Borne hall', ciTypeId: ciType('Wireless Access Point'), companyId: co.id, macAddress: 'aa:bb:cc:00:00:01' })).body;
 
-    const saved = await admin.put('/api/v1/integrations/omada', { enabled: true, baseUrl: 'https://omada.test:8043/', clientId: 'id', clientSecret: 'secret' });
+    const saved = await admin.put('/api/v1/integrations/omada', { enabled: true, mode: 'direct', baseUrl: 'https://omada.test:8043/', clientId: 'id', clientSecret: 'secret' });
     expect(saved.body).toMatchObject({ enabled: true, baseUrl: 'https://omada.test:8043', hasCredentials: true, clientIdHint: '****', deviceKinds: ['ap'] });
     expect(JSON.stringify(saved.body)).not.toContain('secret');
     expect((await admin.post('/api/v1/integrations/omada/test', {})).body).toMatchObject({ ok: true, controllerVersion: '5.15.20', sites: [{ id: 'site-a' }, { id: 'site-b' }] });
@@ -145,7 +145,7 @@ describe('Omada integration', () => {
     expect(panel.clients.find((c: { mac: string }) => c.mac === '112233445566')).toMatchObject({ ssid: 'AURES-STAFF', rssi: -58, trafficDown: 5000000000, wireless: true });
 
     // Switches can be included too; a third sync keeps links and adds the switch.
-    await admin.put('/api/v1/integrations/omada', { enabled: true, baseUrl: 'https://omada.test:8043', deviceKinds: ['ap', 'switch'] });
+    await admin.put('/api/v1/integrations/omada', { enabled: true, mode: 'direct', baseUrl: 'https://omada.test:8043', deviceKinds: ['ap', 'switch'] });
     const third = (await admin.post('/api/v1/integrations/omada/sync?inline=true', {})).body;
     expect(third.stats).toMatchObject({ devices: 3, cisCreated: 1, cisMatched: 0 });
     expect((await admin.get('/api/v1/integrations/omada')).body.counts).toMatchObject({ sites: 2, mappedSites: 1, devices: 3, online: 2, clients: 2 });

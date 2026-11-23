@@ -192,10 +192,21 @@ Every new ticket also gets an internal *Automatic analysis* note (topic, device,
 
 ## 7. TP-Link Omada (Wi-Fi access points)
 
-1. In the Omada controller: **Global View → Settings → Platform Integration → Open API → Add New App**, name `Taskora`, mode **Client** (client credentials), no redirect URL, read access (Viewer) to the sites to synchronise. Copy the Client ID and Client Secret.
-2. Taskora must reach the controller: on-premise controllers listen on `https://<ip>:8043` (OC200/OC300 often `:443`). If Taskora runs in Azure and the controller on a client LAN, publish the controller (VPN, port forward restricted to the Taskora server's public IP) or use the Omada cloud-based controller's northbound address.
-3. **Administration → Integrations → TP-Link Omada → Settings**: controller address, Client ID and secret, leave *Verify the TLS certificate* unticked for a factory certificate, *Test connection*, tick *Synchronise* and save.
-4. **Sites** tab: map each Omada site to its company, then **Synchronise now**. Access points appear as configuration items of the company, with their status and connected clients on the CI page.
+**In Omada** (controller → Global View → Settings → Platform Integration → Open API → **Add New App**): name `Taskora`, mode **Client**, role **Viewer**, site privileges on the sites to synchronise, no redirect URL. Keep the Client ID and Client Secret.
+
+**Agent at the site (recommended, nothing to open on the client network)**
+
+1. Taskora → **Administration → Integrations → TP-Link Omada → Settings**: tick *Synchronise*, choose **Agent at the site**, save.
+2. Click **Create the agent token** and copy the command for the controller's machine:
+   - **Windows** — PowerShell *as Administrator*:
+     `& ([scriptblock]::Create((irm 'https://<taskora>/api/v1/integrations/omada/agent/files/install-windows.ps1'))) -TaskoraUrl 'https://<taskora>' -Token 'tki_…'`
+   - **Linux** — `curl -fsSL https://<taskora>/api/v1/integrations/omada/agent/files/install-linux.sh | sudo bash -s -- --url https://<taskora> --token tki_…`
+3. The installer asks for the Omada Client ID and secret, finds the controller, tests both connections and installs the agent as a service (Windows: scheduled task *Taskora Omada Agent*, log in `C:\ProgramData\TaskoraOmadaAgent\agent.log`; Linux: `systemctl status taskora-omada-agent`, `journalctl -u taskora-omada-agent`). Run the same command again to update; add `-Uninstall` / `--uninstall` to remove.
+4. Back in Taskora, **Sites** tab: map each Omada site to its company. Devices and clients arrive at the next run (every 15 minutes by default).
+
+The agent only makes outgoing HTTPS calls to Taskora; the machine needs internet access to the Taskora address. The Omada keys stay in the agent's configuration file on site (readable by administrators only).
+
+**Direct connection**: when Taskora can reach the controller (same network, VPN, restricted port forward, or an Omada cloud-based controller with its *Interface Access Address* and *Omada ID*), choose *Direct connection* and enter the address and keys in Taskora instead.
 
 ## 8. Action1
 

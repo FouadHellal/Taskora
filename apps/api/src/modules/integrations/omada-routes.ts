@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { and, asc, desc, eq, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, or, sql } from 'drizzle-orm';
 import { omadaSettingsSchema, omadaSiteMappingSchema } from '@taskora/shared';
 import * as s from '../../db/schema/index.js';
 import { audit } from '../../lib/audit.js';
@@ -9,12 +9,14 @@ import { idOf } from '../../lib/params.js';
 import { boolParam } from '../../lib/query.js';
 import { currentUser } from '../../lib/context.js';
 import { buildOmadaClient, getOmadaIntegration, OMADA_PROVIDER, OMADA_SYNC_JOB, readOmadaSecrets, readOmadaSettings, runOmadaSync, type OmadaSecrets } from '../../integrations/omada/sync.js';
+import { agentState, omadaAgentRoutes } from './omada-agent-routes.js';
 
 const hint = (v?: string | null) => (!v ? null : v.length <= 4 ? '****' : `…${v.slice(-4)}`);
 
 /** TP-Link Omada integration (Administration → Integrations → Omada). */
 export async function omadaRoutes(app: FastifyInstance) {
   const db = app.db;
+  await omadaAgentRoutes(app);
 
   async function view() {
     const row = await getOmadaIntegration(db);
@@ -53,6 +55,12 @@ export async function omadaRoutes(app: FastifyInstance) {
       nextSyncAt: row.nextSyncAt,
       counts,
       latestRun: latestRun ?? null,
+      agent: await agentState(db),
+      agentTokens: await db
+        .select({ id: s.integrationTokens.id, name: s.integrationTokens.name, prefix: s.integrationTokens.prefix, createdAt: s.integrationTokens.createdAt, lastUsedAt: s.integrationTokens.lastUsedAt, lastUsedIp: s.integrationTokens.lastUsedIp })
+        .from(s.integrationTokens)
+        .where(and(sql`'omada.agent' = any(${s.integrationTokens.scopes})`, isNull(s.integrationTokens.revokedAt)))
+        .orderBy(desc(s.integrationTokens.createdAt)),
     };
   }
 
@@ -70,15 +78,15 @@ export async function omadaRoutes(app: FastifyInstance) {
     const clientId = body.clientId || stored?.clientId || '';
     const clientSecret = body.clientSecret || stored?.clientSecret || '';
     const credentialsChanged = (!!body.clientId && body.clientId !== stored?.clientId) || (!!body.clientSecret && body.clientSecret !== stored?.clientSecret);
-    if (body.enabled && (!body.baseUrl || !clientId || !clientSecret)) {
+    if (body.enabled && body.mode === 'direct' && (!body.baseUrl || !clientId || !clientSecret)) {
       throw badRequest('Enter the controller address, Client ID and secret before enabling the integration', {
         fields: { ...(!body.baseUrl ? { baseUrl: 'Required' } : {}), ...(!clientId ? { clientId: 'Required' } : {}), ...(!clientSecret ? { clientSecret: 'Required' } : {}) },
       });
     }
     const before = readOmadaSettings(row);
-    const config = { baseUrl: body.baseUrl, omadacId: body.omadacId, verifyTls: body.verifyTls, syncIntervalMinutes: body.syncIntervalMinutes, autoCreateCis: body.autoCreateCis, deviceKinds: body.deviceKinds };
+    const config = { mode: body.mode, baseUrl: body.baseUrl, omadacId: body.omadacId, verifyTls: body.verifyTls, syncIntervalMinutes: body.syncIntervalMinutes, autoCreateCis: body.autoCreateCis, deviceKinds: body.deviceKinds };
     const connectionChanged = credentialsChanged || before.baseUrl !== body.baseUrl || before.omadacId !== body.omadacId;
-    const hasCreds = !!clientId && !!clientSecret && !!body.baseUrl;
+    const hasCreds = body.mode === 'agent' || (!!clientId && !!clientSecret && !!body.baseUrl);
     const now = new Date();
     const status = !hasCreds ? 'not_configured' : !body.enabled ? 'disabled' : connectionChanged || ['not_configured', 'disabled'].includes(row.status) ? 'pending' : row.status;
     await db
@@ -89,7 +97,7 @@ export async function omadaRoutes(app: FastifyInstance) {
         ...(credentialsChanged ? { secretsEncrypted: encryptJson(app.config.encryptionKey, { clientId, clientSecret }) } : {}),
         status,
         ...(connectionChanged ? { lastError: null } : {}),
-        nextSyncAt: body.enabled ? (connectionChanged || !row.enabled || !row.nextSyncAt ? now : row.nextSyncAt) : null,
+        nextSyncAt: body.enabled && body.mode === 'direct' ? (connectionChanged || !row.enabled || !row.nextSyncAt ? now : row.nextSyncAt) : null,
       })
       .where(eq(s.integrations.id, row.id));
     await audit(db, req, { action: 'update', entityType: 'integration', entityId: row.id, summary: `Updated Omada integration settings${credentialsChanged ? ' (credentials changed)' : ''}` });

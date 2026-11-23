@@ -772,6 +772,8 @@ export const OMADA_DEVICE_KINDS = ['ap', 'switch', 'gateway'] as const;
 
 export const omadaSettingsSchema = z.object({
   enabled: z.boolean().default(false),
+  /** 'agent': a small agent next to the controller pushes the data (no inbound access needed); 'direct': Taskora calls the controller. */
+  mode: z.enum(['agent', 'direct']).default('agent'),
   /** Controller address, e.g. https://192.168.0.10:8043 (on-premise) or the cloud northbound URL. */
   baseUrl: z
     .string()

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, RefreshCw, Router, Wifi, XCircle } from 'lucide-react';
+import { CheckCircle2, Copy, KeyRound, RefreshCw, Router, Server, Wifi, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -17,8 +17,21 @@ import { EntityPicker } from '@/components/entity-picker';
 import { Switch } from '@/components/admin/switch';
 
 type Kind = 'ap' | 'switch' | 'gateway';
+interface AgentState {
+  lastSeenAt: string | null;
+  lastPushAt: string | null;
+  version: string | null;
+  host: string | null;
+  platform: string | null;
+  controllerVersion: string | null;
+  lastError: string | null;
+  latestVersion: string;
+}
 interface OmadaView {
   enabled: boolean;
+  mode: 'agent' | 'direct';
+  agent: AgentState;
+  agentTokens: { id: number; name: string; prefix: string; createdAt: string; lastUsedAt: string | null; lastUsedIp: string | null }[];
   baseUrl: string;
   omadacId: string;
   verifyTls: boolean;
@@ -102,7 +115,8 @@ export default function OmadaPage() {
         icon={<Wifi />}
         subtitle="Access points (and optionally switches and gateways) from the Omada controller become configuration items, with their status and connected clients"
         actions={
-          manage && (
+          manage &&
+          v.mode === 'direct' && (
             <Button variant="primary" loading={sync.isPending} disabled={!v.hasCredentials || !v.baseUrl} onClick={() => sync.mutate()}>
               <RefreshCw /> Synchronise now
             </Button>
@@ -127,7 +141,7 @@ export default function OmadaPage() {
             )}
           </CardBody>
         </Card>
-        <Tabs defaultValue={v.hasCredentials ? 'devices' : 'settings'}>
+        <Tabs defaultValue={v.hasCredentials || v.agent.lastPushAt ? 'devices' : 'settings'}>
           <TabsList>
             <TabsTrigger value="devices">Devices</TabsTrigger>
             <TabsTrigger value="sites">Sites</TabsTrigger>
@@ -188,10 +202,32 @@ function Settings({ view, manage }: { view: OmadaView; manage: boolean }) {
   );
   return (
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="space-y-4">
       <Card>
         <CardHeader title="Connection" />
         <CardBody className="space-y-4">
           <Checkbox label={t('Synchronise with the Omada controller')} checked={f.enabled} disabled={!manage} onChange={(e) => setF({ ...f, enabled: e.target.checked })} />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(
+              [
+                ['agent', 'Agent at the site (recommended)', 'A small agent installed next to the controller sends the data to Taskora. Nothing to open on the client network; the Omada keys stay on site.'],
+                ['direct', 'Direct connection', 'Taskora calls the controller itself: it must be reachable from the Taskora server (VPN, port forward or Omada cloud-based controller).'],
+              ] as const
+            ).map(([m, label, hint]) => (
+              <button
+                key={m}
+                type="button"
+                disabled={!manage}
+                onClick={() => setF({ ...f, mode: m })}
+                className={`cursor-pointer rounded-md border p-3 text-left disabled:cursor-not-allowed ${f.mode === m ? 'border-primary bg-primary-soft/40' : 'border-border hover:border-border-strong'}`}
+              >
+                <div className="text-[13px] font-medium">{t(label)}</div>
+                <div className="mt-0.5 text-[11px] text-muted">{t(hint)}</div>
+              </button>
+            ))}
+          </div>
+          {f.mode === 'direct' && (
+          <>
           <FormGrid cols={2}>
             <FormField label="Open API address" required hint="The “Interface Access Address” shown in Omada → Settings → Platform Integration → Open API. Cloud: pick your region. On-premise: https://IP:8043, reachable from the Taskora server.">
               <Input value={f.baseUrl} disabled={!manage} placeholder="https://euw1-omada-northbound.tplinkcloud.com" onChange={(e) => setF({ ...f, baseUrl: e.target.value })} />
@@ -224,6 +260,8 @@ function Settings({ view, manage }: { view: OmadaView; manage: boolean }) {
             <Checkbox label={t('Verify the TLS certificate')} checked={f.verifyTls} disabled={!manage} onChange={(e) => setF({ ...f, verifyTls: e.target.checked })} />
             <p className="ml-6 mt-0.5 text-xs text-muted">{t('Leave unticked for controllers with their factory (self-signed) certificate.')}</p>
           </div>
+          </>
+          )}
           <FormGrid cols={2}>
             <FormField label="Synchronise every (minutes)">
               <Input type="number" min={5} max={1440} value={f.syncIntervalMinutes} disabled={!manage} onChange={(e) => setF({ ...f, syncIntervalMinutes: Number(e.target.value) || 15 })} />
@@ -245,9 +283,11 @@ function Settings({ view, manage }: { view: OmadaView; manage: boolean }) {
               <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
                 Save
               </Button>
-              <Button loading={tryIt.isPending} onClick={() => tryIt.mutate()}>
-                Test connection
-              </Button>
+              {f.mode === 'direct' && (
+                <Button loading={tryIt.isPending} onClick={() => tryIt.mutate()}>
+                  Test connection
+                </Button>
+              )}
             </div>
           )}
           {test && (
@@ -266,21 +306,162 @@ function Settings({ view, manage }: { view: OmadaView; manage: boolean }) {
           )}
         </CardBody>
       </Card>
-      <Card>
+      {view.mode === 'agent' && f.mode === 'agent' ? <AgentSetup view={view} manage={manage} /> : null}
+      {view.mode !== f.mode && f.mode === 'agent' && <p className="rounded-md bg-info-soft px-3 py-2 text-xs text-info">{t('Save to set up the site agent.')}</p>}
+      </div>
+      <Card className="self-start">
         <CardHeader title="How to create the API access in Omada" />
         <CardBody className="space-y-2 text-[13px]">
           <ol className="list-decimal space-y-1.5 pl-5">
             <li>{t('In the Omada controller, open Global View → Settings → Platform Integration → Open API.')}</li>
             <li>{t('Click Add New App, give it a name (e.g. Taskora) and choose the mode “Client” (client credentials). Leave the Redirect URL empty.')}</li>
             <li>{t('Give the app read access to the sites you want (Viewer is enough: Taskora never changes anything).')}</li>
-            <li>{t('On the same page, note the Interface Access Address and the Omada ID shown at the top.')}</li>
-            <li>{t('Copy the Client ID and the Client Secret into this page, with the controller address, then click Test connection.')}</li>
-            <li>{t('Save, map each Omada site to its company in the Sites tab and synchronise.')}</li>
+            {f.mode === 'direct' && <li>{t('On the same page, note the Interface Access Address and the Omada ID shown at the top.')}</li>}
+            {f.mode === 'agent' ? (
+              <li>{t('Keep the Client ID and the Client Secret: the agent installer asks for them on the controller’s machine (they are not sent to Taskora).')}</li>
+            ) : (
+              <>
+                <li>{t('Copy the Client ID and the Client Secret into this page, with the controller address, then click Test connection.')}</li>
+                <li>{t('Save, map each Omada site to its company in the Sites tab and synchronise.')}</li>
+              </>
+            )}
           </ol>
           <p className="text-xs text-muted">{t('Taskora only reads from Omada. Devices that disappear are flagged, never deleted.')}</p>
         </CardBody>
       </Card>
     </div>
+  );
+}
+
+function CopyBox({ label, text }: { label: string; text: string }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between gap-2 text-[12px] font-medium">
+        {t(label)}
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            void navigator.clipboard.writeText(text).then(() => toast.success(t('Copied')));
+          }}
+        >
+          <Copy /> Copy
+        </Button>
+      </div>
+      <pre className="overflow-x-auto whitespace-pre-wrap break-all rounded-md border border-border bg-surface-2 px-3 py-2 font-mono text-[11px] leading-relaxed">{text}</pre>
+    </div>
+  );
+}
+
+/** Agent mode: create a token, copy the install command, watch the agent report in. */
+function AgentSetup({ view, manage }: { view: OmadaView; manage: boolean }) {
+  const qc = useQueryClient();
+  const [token, setToken] = useState<string | null>(null);
+  const origin = window.location.origin;
+  const create = useMutation({
+    mutationFn: () => api.post<{ token: string }>('/integrations/omada/agent/token', {}),
+    onSuccess: (r) => {
+      setToken(r.token);
+      qc.invalidateQueries({ queryKey: ['omada'] });
+    },
+    onError: (e) => handleFormError(e),
+  });
+  const revoke = useMutation({
+    mutationFn: (id: number) => api.delete(`/integrations/tokens/${id}`),
+    onSuccess: () => {
+      toast.success(t('Token revoked'));
+      qc.invalidateQueries({ queryKey: ['omada'] });
+    },
+    onError: (e) => handleFormError(e),
+  });
+  const tok = token ?? 'PASTE-THE-AGENT-TOKEN';
+  const files = `${origin}/api/v1/integrations/omada/agent/files`;
+  const windows = `& ([scriptblock]::Create((irm '${files}/install-windows.ps1'))) -TaskoraUrl '${origin}' -Token '${tok}'`;
+  const linux = `curl -fsSL ${files}/install-linux.sh | sudo bash -s -- --url ${origin} --token ${tok}`;
+  const a = view.agent;
+  const seen = a.lastSeenAt ? Date.now() - new Date(a.lastSeenAt).getTime() : null;
+  const healthy = seen !== null && seen < (view.syncIntervalMinutes * 2 + 5) * 60_000 && !a.lastError;
+  return (
+    <Card>
+      <CardHeader
+        title={
+          <span className="inline-flex items-center gap-2">
+            <Server className="size-4 text-primary" /> {t('Site agent')}
+            {a.lastSeenAt ? healthy ? <Badge tone="success">{t('Connected')}</Badge> : <Badge tone="warning">{a.lastError ? t('Error') : t('Silent')}</Badge> : <Badge>{t('Not installed yet')}</Badge>}
+          </span>
+        }
+        description={t('Runs on the controller’s machine (Windows or Linux) and sends the data every few minutes over HTTPS.')}
+      />
+      <CardBody className="space-y-4 text-[13px]">
+        {a.lastSeenAt && (
+          <div className="grid grid-cols-2 gap-2 rounded-md bg-surface-2 p-3 text-[12px]">
+            <div>
+              <div className="text-muted">{t('Last contact')}</div>
+              <div className="font-medium" title={fmtDateTime(a.lastSeenAt)}>{fmtRelative(a.lastSeenAt)}</div>
+            </div>
+            <div>
+              <div className="text-muted">{t('Last data received')}</div>
+              <div className="font-medium">{a.lastPushAt ? fmtRelative(a.lastPushAt) : '—'}</div>
+            </div>
+            <div>
+              <div className="text-muted">{t('Machine')}</div>
+              <div className="font-medium">{a.host ?? '—'}</div>
+            </div>
+            <div>
+              <div className="text-muted">{t('Agent / controller')}</div>
+              <div className="font-medium">
+                {a.version ?? '?'}
+                {a.version && a.version !== a.latestVersion ? ` (${t('update available')})` : ''} / {a.controllerVersion ?? '?'}
+              </div>
+            </div>
+            {a.lastError && <div className="col-span-2 rounded bg-danger-soft px-2 py-1.5 text-danger">{a.lastError}</div>}
+          </div>
+        )}
+        <ol className="list-decimal space-y-3 pl-5">
+          <li>
+            <div className="font-medium">{t('Create the agent token')}</div>
+            {manage && (
+              <Button className="mt-1.5" size="sm" variant={token ? 'secondary' : 'primary'} loading={create.isPending} onClick={() => create.mutate()}>
+                <KeyRound /> {token ? t('Create another token') : t('Create the agent token')}
+              </Button>
+            )}
+            {token && <p className="mt-1.5 rounded bg-warning-soft px-2 py-1.5 text-[12px] text-warning">{t('The commands below contain the token. It is shown only now: copy the command before leaving this page.')}</p>}
+          </li>
+          <li>
+            <div className="mb-1.5 font-medium">{t('On the controller’s machine, run the command for its system')}</div>
+            <div className="space-y-3">
+              <CopyBox label="Windows — PowerShell as Administrator" text={windows} />
+              <CopyBox label="Linux — terminal" text={linux} />
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted">
+              {t('The installer asks for the Omada Client ID and Client Secret, finds the controller on the machine, tests both connections and installs the agent as a service that starts with the machine. Run it again to update; add -Uninstall (Windows) or --uninstall (Linux) to remove it.')}
+            </p>
+          </li>
+          <li>
+            <div className="font-medium">{t('Map each Omada site to its company (Sites tab)')}</div>
+            <p className="text-[11px] text-muted">{t('The sites appear after the first contact of the agent; devices and clients arrive at the next run.')}</p>
+          </li>
+        </ol>
+        {view.agentTokens.length > 0 && (
+          <div>
+            <div className="mb-1 text-[12px] font-medium">{t('Agent tokens')}</div>
+            <ul className="divide-y divide-border rounded-md border border-border text-[12px]">
+              {view.agentTokens.map((x) => (
+                <li key={x.id} className="flex items-center gap-2 px-3 py-1.5">
+                  <span className="font-mono">{x.prefix}…</span>
+                  <span className="min-w-0 flex-1 truncate text-muted">{x.lastUsedAt ? t('used {when} from {ip}', { when: fmtRelative(x.lastUsedAt), ip: x.lastUsedIp ?? '?' }) : t('never used')}</span>
+                  {manage && (
+                    <Button size="sm" variant="ghost" className="text-danger" loading={revoke.isPending && revoke.variables === x.id} onClick={() => revoke.mutate(x.id)}>
+                      Revoke
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </CardBody>
+    </Card>
   );
 }
 

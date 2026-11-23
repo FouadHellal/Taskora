@@ -23,6 +23,7 @@ export type OmadaKind = (typeof OMADA_DEVICE_KINDS)[number] | 'other';
 
 export interface OmadaSettings {
   enabled: boolean;
+  mode: 'agent' | 'direct';
   baseUrl: string;
   omadacId: string;
   verifyTls: boolean;
@@ -38,7 +39,7 @@ export interface OmadaSecrets {
 export function readOmadaSettings(row: Pick<IntegrationRow, 'config' | 'enabled'> | null | undefined): OmadaSettings {
   const parsed = omadaSettingsSchema.safeParse({ ...(row?.config ?? {}), enabled: row?.enabled ?? false, clientId: undefined, clientSecret: undefined });
   const v = parsed.success ? parsed.data : omadaSettingsSchema.parse({ enabled: row?.enabled ?? false });
-  return { enabled: v.enabled, baseUrl: v.baseUrl, omadacId: v.omadacId, verifyTls: v.verifyTls, syncIntervalMinutes: v.syncIntervalMinutes, autoCreateCis: v.autoCreateCis, deviceKinds: v.deviceKinds };
+  return { enabled: v.enabled, mode: v.mode, baseUrl: v.baseUrl, omadacId: v.omadacId, verifyTls: v.verifyTls, syncIntervalMinutes: v.syncIntervalMinutes, autoCreateCis: v.autoCreateCis, deviceKinds: v.deviceKinds };
 }
 
 export function readOmadaSecrets(config: Config, row: Pick<IntegrationRow, 'secretsEncrypted'> | null | undefined): OmadaSecrets | null {
@@ -115,6 +116,185 @@ function deviceStatus(d: Record<string, unknown>) {
   return { status: online ? 'online' : pending ? 'pending' : 'offline', statusDetail: label };
 }
 
+
+export interface OmadaSiteData {
+  devices: Record<string, unknown>[];
+  clientStats?: Record<string, unknown>[];
+  clients: Record<string, unknown>[];
+}
+
+/** Stores one mapped site's devices and clients (from a direct pull or from the site agent). */
+export async function ingestOmadaSite(
+  db: Db,
+  site: typeof s.omadaSites.$inferSelect,
+  data: OmadaSiteData,
+  settings: Pick<OmadaSettings, 'deviceKinds' | 'autoCreateCis'>,
+  stats: OmadaSyncStats,
+  note: (level: string, message: string) => void,
+  now = new Date(),
+) {
+  const ciTypes = await db.select({ id: s.ciTypes.id, name: s.ciTypes.name }).from(s.ciTypes);
+  const settingsSys = await getSystemSettings(db);
+    const companyId = site.companyId!;
+    // 2. Devices.
+    const wanted = data.devices.filter((d) => settings.deviceKinds.includes(deviceKind(d)));
+    const stat = data.clientStats ?? [];
+    const statOf = new Map(stat.map((x) => [normalizeMac(x.mac), x]));
+    const seen: string[] = [];
+    for (const d of wanted) {
+      const mac = normalizeMac(d.mac);
+      if (mac.length !== 12) continue;
+      seen.push(mac);
+      stats.devices++;
+      const kind = deviceKind(d);
+      const st = deviceStatus(d);
+      const bands = statOf.get(mac);
+      const values = {
+        siteId: site.siteId,
+        kind,
+        name: str(d.name),
+        model: str(d.modelName ?? d.model),
+        serialNumber: str(d.sn),
+        firmwareVersion: str(d.firmwareVersion),
+        ipAddress: str(d.ip),
+        status: st.status,
+        statusDetail: st.statusDetail,
+        uptimeSeconds: uptimeSeconds(d.uptime),
+        cpuUtil: num(d.cpuUtil),
+        memUtil: num(d.memUtil),
+        clientCount: num(bands?.clientNum ?? d.clientNum),
+        clientCount2g: num(bands?.clientNum2g),
+        clientCount5g: num((Number(bands?.clientNum5g ?? 0) + Number(bands?.clientNum5g2 ?? 0)) || (bands ? 0 : null)),
+        clientCount6g: num(bands?.clientNum6g),
+        uplinkDeviceName: str(d.uplinkDeviceName),
+        uplinkPort: str(d.uplinkDevicePort),
+        linkSpeed: d.linkSpeed !== undefined && d.linkSpeed !== null ? (LINK_SPEED[Number(d.linkSpeed)] ?? String(d.linkSpeed)) : null,
+        lastSeenAt: toDate(d.lastSeen) ?? (st.status === 'online' ? now : null),
+        raw: d,
+        missingSince: null,
+        lastSyncedAt: now,
+      };
+      const [dev] = await db
+        .insert(s.omadaDevices)
+        .values({ mac, ...values })
+        .onConflictDoUpdate({ target: s.omadaDevices.mac, set: values })
+        .returning();
+
+      // 3. Configuration item: keep the link, or match MAC → serial → name in the company, or create.
+      let ciId = dev!.configurationItemId;
+      if (ciId) {
+        const [ci] = await db.select({ companyId: s.configurationItems.companyId }).from(s.configurationItems).where(eq(s.configurationItems.id, ciId));
+        if (!ci || ci.companyId !== companyId) ciId = null;
+      }
+      if (!ciId) {
+        const taken = sql`${s.configurationItems.id} not in (select configuration_item_id from omada_devices where configuration_item_id is not null and mac <> ${mac})`;
+        const inCompany = and(eq(s.configurationItems.companyId, companyId), taken);
+        const [byMac] = await db.select({ id: s.configurationItems.id }).from(s.configurationItems).where(and(inCompany, sql`regexp_replace(lower(coalesce(${s.configurationItems.macAddress}, '')), '[^0-9a-f]', '', 'g') = ${mac}`)).limit(2);
+        const bySerial = !byMac && values.serialNumber ? (await db.select({ id: s.configurationItems.id }).from(s.configurationItems).where(and(inCompany, sql`lower(${s.configurationItems.serialNumber}) = ${values.serialNumber.toLowerCase()}`)).limit(1))[0] : undefined;
+        const byName = !byMac && !bySerial && values.name ? (await db.select({ id: s.configurationItems.id }).from(s.configurationItems).where(and(inCompany, sql`lower(${s.configurationItems.name}) = ${values.name.toLowerCase()}`)).limit(1))[0] : undefined;
+        ciId = (byMac ?? bySerial ?? byName)?.id ?? null;
+        if (ciId) stats.cisMatched++;
+        else if (settings.autoCreateCis) {
+          const typeId = ciTypes.find((t) => t.name === KIND_CI_TYPE[kind])?.id ?? ciTypes.find((t) => t.name === 'Other')?.id ?? ciTypes[0]?.id;
+          if (typeId) {
+            const [ci] = await db
+              .insert(s.configurationItems)
+              .values({
+                ciNumber: formatNumber(settingsSys.ciPrefix, await nextSequence(db, 'ci')),
+                name: values.name ?? prettyMac(mac),
+                ciTypeId: typeId,
+                companyId,
+                manufacturer: 'TP-Link',
+                model: values.model,
+                serialNumber: values.serialNumber,
+                macAddress: prettyMac(mac),
+                ipAddress: values.ipAddress,
+                osVersion: values.firmwareVersion,
+                lastSeenAt: values.lastSeenAt,
+                source: OMADA_PROVIDER,
+                notes: `Created from Omada site "${site.name}".`,
+              })
+              .returning({ id: s.configurationItems.id });
+            ciId = ci!.id;
+            stats.cisCreated++;
+          }
+        }
+        if (ciId) await db.update(s.omadaDevices).set({ configurationItemId: ciId }).where(eq(s.omadaDevices.mac, mac));
+      }
+      // Keep the CI's network facts current (never its name or owner).
+      if (ciId) {
+        await db
+          .update(s.configurationItems)
+          .set({
+            ipAddress: values.ipAddress ?? undefined,
+            osVersion: values.firmwareVersion ?? undefined,
+            lastSeenAt: values.lastSeenAt ?? undefined,
+            macAddress: sql`coalesce(nullif(${s.configurationItems.macAddress}, ''), ${prettyMac(mac)})`,
+            serialNumber: sql`coalesce(nullif(${s.configurationItems.serialNumber}, ''), ${values.serialNumber})`,
+            model: sql`coalesce(nullif(${s.configurationItems.model}, ''), ${values.model})`,
+            manufacturer: sql`coalesce(nullif(${s.configurationItems.manufacturer}, ''), 'TP-Link')`,
+          })
+          .where(eq(s.configurationItems.id, ciId));
+      }
+    }
+    // Devices of the site that disappeared are flagged, never deleted.
+    await db
+      .update(s.omadaDevices)
+      .set({ missingSince: now })
+      .where(and(eq(s.omadaDevices.siteId, site.siteId), isNull(s.omadaDevices.missingSince), seen.length ? notInArray(s.omadaDevices.mac, seen) : undefined));
+
+    // 4. Clients currently online.
+    const clients = data.clients;
+    const online: string[] = [];
+    for (const c of clients) {
+      const mac = normalizeMac(c.mac);
+      if (!mac) continue;
+      online.push(mac);
+      const wireless = c.wireless === true || c.wireless === 1 || !!c.ssid;
+      const values = {
+        siteId: site.siteId,
+        deviceMac: normalizeMac(wireless ? c.apMac : (c.switchMac ?? c.gatewayMac)) || null,
+        name: str(c.name),
+        hostName: str(c.hostName),
+        ipAddress: str(c.ip),
+        vendor: str(c.vendor),
+        osName: str(c.osName),
+        deviceType: str(c.deviceType ?? c.deviceCategory),
+        wireless,
+        ssid: str(c.ssid),
+        networkName: str(c.networkName),
+        rssi: num(c.rssi),
+        signalLevel: num(c.signalLevel),
+        snr: num(c.snr),
+        wifiMode: str(c.wifiMode),
+        channel: num(c.channel),
+        radio: str(c.radioId),
+        rxRate: num(c.rxRate),
+        txRate: num(c.txRate),
+        trafficDown: num(c.trafficDown),
+        trafficUp: num(c.trafficUp),
+        uptimeSeconds: uptimeSeconds(c.uptime),
+        switchPort: str(c.portName ?? c.port),
+        guest: c.guest === true,
+        active: true,
+        lastSeenAt: toDate(c.lastSeen) ?? now,
+        raw: c,
+        lastSyncedAt: now,
+      };
+      await db
+        .insert(s.omadaClients)
+        .values({ mac, ...values })
+        .onConflictDoUpdate({ target: [s.omadaClients.siteId, s.omadaClients.mac], set: values });
+      stats.clients++;
+    }
+    await db
+      .update(s.omadaClients)
+      .set({ active: false })
+      .where(and(eq(s.omadaClients.siteId, site.siteId), online.length ? notInArray(s.omadaClients.mac, online) : undefined));
+    await db.update(s.omadaSites).set({ deviceCount: wanted.length, clientCount: online.length, lastSyncedAt: now }).where(eq(s.omadaSites.id, site.id));
+    note('info', `${site.name}: ${wanted.length} device(s), ${online.length} client(s) online`);
+}
+
 /* --------------------------------------------------------------------- run */
 
 export interface OmadaSyncStats {
@@ -136,6 +316,7 @@ export async function runOmadaSync(db: Db, config: Config, opts: { trigger: 'man
   const stats: OmadaSyncStats = { sites: 0, mappedSites: 0, devices: 0, cisMatched: 0, cisCreated: 0, clients: 0 };
   const now = new Date();
   try {
+    if (settings.mode === 'agent') throw new AppError(400, 'agent_mode', 'The site agent sends the data: Taskora does not call the controller in agent mode');
     if (!settings.baseUrl || !secrets) throw new AppError(400, 'not_configured', 'Enter the controller address, Client ID and secret first');
     const client = buildOmadaClient({ baseUrl: settings.baseUrl, omadacId: settings.omadacId || null, verifyTls: settings.verifyTls, ...secrets });
 
@@ -157,169 +338,12 @@ export async function runOmadaSync(db: Db, config: Config, opts: { trigger: 'man
     stats.mappedSites = mapped.length;
     if (!mapped.length) note('info', 'No site is mapped to a company yet: map the sites, then synchronise again.');
 
-    const ciTypes = await db.select({ id: s.ciTypes.id, name: s.ciTypes.name }).from(s.ciTypes);
-    const settingsSys = await getSystemSettings(db);
-
     for (const site of mapped) {
-      const companyId = site.companyId!;
-      // 2. Devices.
-      const raw = await client.devices(site.siteId);
-      const wanted = raw.filter((d) => settings.deviceKinds.includes(deviceKind(d)));
-      const stat = await client.clientStats(site.siteId, wanted.map((d) => String(d.mac ?? '')).filter(Boolean));
-      const statOf = new Map(stat.map((x) => [normalizeMac(x.mac), x]));
-      const seen: string[] = [];
-      for (const d of wanted) {
-        const mac = normalizeMac(d.mac);
-        if (mac.length !== 12) continue;
-        seen.push(mac);
-        stats.devices++;
-        const kind = deviceKind(d);
-        const st = deviceStatus(d);
-        const bands = statOf.get(mac);
-        const values = {
-          siteId: site.siteId,
-          kind,
-          name: str(d.name),
-          model: str(d.modelName ?? d.model),
-          serialNumber: str(d.sn),
-          firmwareVersion: str(d.firmwareVersion),
-          ipAddress: str(d.ip),
-          status: st.status,
-          statusDetail: st.statusDetail,
-          uptimeSeconds: uptimeSeconds(d.uptime),
-          cpuUtil: num(d.cpuUtil),
-          memUtil: num(d.memUtil),
-          clientCount: num(bands?.clientNum ?? d.clientNum),
-          clientCount2g: num(bands?.clientNum2g),
-          clientCount5g: num((Number(bands?.clientNum5g ?? 0) + Number(bands?.clientNum5g2 ?? 0)) || (bands ? 0 : null)),
-          clientCount6g: num(bands?.clientNum6g),
-          uplinkDeviceName: str(d.uplinkDeviceName),
-          uplinkPort: str(d.uplinkDevicePort),
-          linkSpeed: d.linkSpeed !== undefined && d.linkSpeed !== null ? (LINK_SPEED[Number(d.linkSpeed)] ?? String(d.linkSpeed)) : null,
-          lastSeenAt: toDate(d.lastSeen) ?? (st.status === 'online' ? now : null),
-          raw: d,
-          missingSince: null,
-          lastSyncedAt: now,
-        };
-        const [dev] = await db
-          .insert(s.omadaDevices)
-          .values({ mac, ...values })
-          .onConflictDoUpdate({ target: s.omadaDevices.mac, set: values })
-          .returning();
-
-        // 3. Configuration item: keep the link, or match MAC → serial → name in the company, or create.
-        let ciId = dev!.configurationItemId;
-        if (ciId) {
-          const [ci] = await db.select({ companyId: s.configurationItems.companyId }).from(s.configurationItems).where(eq(s.configurationItems.id, ciId));
-          if (!ci || ci.companyId !== companyId) ciId = null;
-        }
-        if (!ciId) {
-          const taken = sql`${s.configurationItems.id} not in (select configuration_item_id from omada_devices where configuration_item_id is not null and mac <> ${mac})`;
-          const inCompany = and(eq(s.configurationItems.companyId, companyId), taken);
-          const [byMac] = await db.select({ id: s.configurationItems.id }).from(s.configurationItems).where(and(inCompany, sql`regexp_replace(lower(coalesce(${s.configurationItems.macAddress}, '')), '[^0-9a-f]', '', 'g') = ${mac}`)).limit(2);
-          const bySerial = !byMac && values.serialNumber ? (await db.select({ id: s.configurationItems.id }).from(s.configurationItems).where(and(inCompany, sql`lower(${s.configurationItems.serialNumber}) = ${values.serialNumber.toLowerCase()}`)).limit(1))[0] : undefined;
-          const byName = !byMac && !bySerial && values.name ? (await db.select({ id: s.configurationItems.id }).from(s.configurationItems).where(and(inCompany, sql`lower(${s.configurationItems.name}) = ${values.name.toLowerCase()}`)).limit(1))[0] : undefined;
-          ciId = (byMac ?? bySerial ?? byName)?.id ?? null;
-          if (ciId) stats.cisMatched++;
-          else if (settings.autoCreateCis) {
-            const typeId = ciTypes.find((t) => t.name === KIND_CI_TYPE[kind])?.id ?? ciTypes.find((t) => t.name === 'Other')?.id ?? ciTypes[0]?.id;
-            if (typeId) {
-              const [ci] = await db
-                .insert(s.configurationItems)
-                .values({
-                  ciNumber: formatNumber(settingsSys.ciPrefix, await nextSequence(db, 'ci')),
-                  name: values.name ?? prettyMac(mac),
-                  ciTypeId: typeId,
-                  companyId,
-                  manufacturer: 'TP-Link',
-                  model: values.model,
-                  serialNumber: values.serialNumber,
-                  macAddress: prettyMac(mac),
-                  ipAddress: values.ipAddress,
-                  osVersion: values.firmwareVersion,
-                  lastSeenAt: values.lastSeenAt,
-                  source: OMADA_PROVIDER,
-                  notes: `Created from Omada site "${site.name}".`,
-                })
-                .returning({ id: s.configurationItems.id });
-              ciId = ci!.id;
-              stats.cisCreated++;
-            }
-          }
-          if (ciId) await db.update(s.omadaDevices).set({ configurationItemId: ciId }).where(eq(s.omadaDevices.mac, mac));
-        }
-        // Keep the CI's network facts current (never its name or owner).
-        if (ciId) {
-          await db
-            .update(s.configurationItems)
-            .set({
-              ipAddress: values.ipAddress ?? undefined,
-              osVersion: values.firmwareVersion ?? undefined,
-              lastSeenAt: values.lastSeenAt ?? undefined,
-              macAddress: sql`coalesce(nullif(${s.configurationItems.macAddress}, ''), ${prettyMac(mac)})`,
-              serialNumber: sql`coalesce(nullif(${s.configurationItems.serialNumber}, ''), ${values.serialNumber})`,
-              model: sql`coalesce(nullif(${s.configurationItems.model}, ''), ${values.model})`,
-              manufacturer: sql`coalesce(nullif(${s.configurationItems.manufacturer}, ''), 'TP-Link')`,
-            })
-            .where(eq(s.configurationItems.id, ciId));
-        }
-      }
-      // Devices of the site that disappeared are flagged, never deleted.
-      await db
-        .update(s.omadaDevices)
-        .set({ missingSince: now })
-        .where(and(eq(s.omadaDevices.siteId, site.siteId), isNull(s.omadaDevices.missingSince), seen.length ? notInArray(s.omadaDevices.mac, seen) : undefined));
-
-      // 4. Clients currently online.
+      const devices = await client.devices(site.siteId);
+      const wantedMacs = devices.filter((d) => settings.deviceKinds.includes(deviceKind(d))).map((d) => String(d.mac ?? '')).filter(Boolean);
+      const clientStats = await client.clientStats(site.siteId, wantedMacs);
       const clients = await client.clients(site.siteId);
-      const online: string[] = [];
-      for (const c of clients) {
-        const mac = normalizeMac(c.mac);
-        if (!mac) continue;
-        online.push(mac);
-        const wireless = c.wireless === true || c.wireless === 1 || !!c.ssid;
-        const values = {
-          siteId: site.siteId,
-          deviceMac: normalizeMac(wireless ? c.apMac : (c.switchMac ?? c.gatewayMac)) || null,
-          name: str(c.name),
-          hostName: str(c.hostName),
-          ipAddress: str(c.ip),
-          vendor: str(c.vendor),
-          osName: str(c.osName),
-          deviceType: str(c.deviceType ?? c.deviceCategory),
-          wireless,
-          ssid: str(c.ssid),
-          networkName: str(c.networkName),
-          rssi: num(c.rssi),
-          signalLevel: num(c.signalLevel),
-          snr: num(c.snr),
-          wifiMode: str(c.wifiMode),
-          channel: num(c.channel),
-          radio: str(c.radioId),
-          rxRate: num(c.rxRate),
-          txRate: num(c.txRate),
-          trafficDown: num(c.trafficDown),
-          trafficUp: num(c.trafficUp),
-          uptimeSeconds: uptimeSeconds(c.uptime),
-          switchPort: str(c.portName ?? c.port),
-          guest: c.guest === true,
-          active: true,
-          lastSeenAt: toDate(c.lastSeen) ?? now,
-          raw: c,
-          lastSyncedAt: now,
-        };
-        await db
-          .insert(s.omadaClients)
-          .values({ mac, ...values })
-          .onConflictDoUpdate({ target: [s.omadaClients.siteId, s.omadaClients.mac], set: values });
-        stats.clients++;
-      }
-      await db
-        .update(s.omadaClients)
-        .set({ active: false })
-        .where(and(eq(s.omadaClients.siteId, site.siteId), online.length ? notInArray(s.omadaClients.mac, online) : undefined));
-      await db.update(s.omadaSites).set({ deviceCount: wanted.length, clientCount: online.length, lastSyncedAt: now }).where(eq(s.omadaSites.id, site.id));
-      note('info', `${site.name}: ${wanted.length} device(s), ${online.length} client(s) online`);
+      await ingestOmadaSite(db, site, { devices, clientStats, clients }, settings, stats, note, now);
     }
     // Clients not seen for 30 days are forgotten.
     await db.delete(s.omadaClients).where(lt(s.omadaClients.lastSeenAt, new Date(now.getTime() - 30 * 86400_000)));

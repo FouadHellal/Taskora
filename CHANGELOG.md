@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.11.0] — 2026-11-24
+
+### Added
+- **Omada site agent**: for Omada controllers that Taskora cannot reach (on a client's network, or reached only through TP-Link Cloud Access), a small agent installed on the controller's machine reads the controller locally and pushes the sites, devices and connected clients to Taskora over HTTPS. Nothing has to be opened on the client network and the Omada credentials stay on site.
+  - *TP-Link Omada → Settings → Agent at the site*: **Create the agent token** gives a ready-to-paste install command for **Windows** (PowerShell as Administrator) and **Linux**.
+  - The installers download Node.js if needed (portable, only for the agent), ask for the Omada Client ID and secret, find the controller on the machine (ports 8043, 443, 8843, 8088), test both connections, and install the agent as a service that starts with the machine (Windows scheduled task as SYSTEM, Linux systemd service under its own user). Run again to update; `-Uninstall` / `--uninstall` removes it.
+  - The agent only sends the fields Taskora uses; failures on site (e.g. refused Omada credentials) are reported and shown on the Omada page. The page shows the agent's last contact, machine, versions and tokens (revocable).
+  - New integration token scope `omada.agent`; endpoints `GET /integrations/omada/agent/config` and `POST /integrations/omada/agent/push` (token), agent files at `/api/v1/integrations/omada/agent/files/…`.
+- *Direct connection* remains available for controllers reachable from the server.
+
+### Upgrade notes
+- `bash scripts/update.sh` (no database change). The Docker image now contains the agent files (`apps/api/agents`).
+
 ## [0.10.1] — 2026-11-24
 
 ### Fixed
