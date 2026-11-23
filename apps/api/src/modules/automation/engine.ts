@@ -4,6 +4,7 @@ import type { Db, Tx } from '../../db/client.js';
 import * as s from '../../db/schema/index.js';
 import { addTicketNote, getTicketRow, updateTicket, type TicketRow } from '../tickets/service.js';
 import { emitTicketEvent } from '../../lib/webhooks.js';
+import { enqueue } from '../../jobs/queue.js';
 import { notify } from '../notifications/service.js';
 
 export function matchesConditions(ticket: Record<string, unknown>, conditions: WorkflowCondition[]): boolean {
@@ -92,6 +93,11 @@ export async function runTicketRules(
 ): Promise<number> {
   if (!opts.ruleIds && (trigger === 'ticket.created' || trigger === 'ticket.updated' || trigger === 'ticket.sla_breached')) {
     await emitTicketEvent(db, trigger, ticketId);
+  }
+  // Proactive e-mails (IT alert + client confirmation, "resolved" notice); the worker checks settings and preferences.
+  if (!opts.ruleIds && trigger === 'ticket.created') await enqueue(db, 'email.ticket_created', { ticketId }, { maxAttempts: 3 });
+  if (!opts.ruleIds && trigger === 'ticket.updated') {
+    await enqueue(db, 'email.ticket_updated', { ticketId }, { dedupeKey: `email.ticket_updated:${ticketId}`, maxAttempts: 3, runAt: new Date(Date.now() + 15_000) });
   }
   const rules = await db
     .select()

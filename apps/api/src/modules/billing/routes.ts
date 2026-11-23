@@ -208,16 +208,7 @@ export async function billingRoutes(app: FastifyInstance) {
     return paginated(rows.map((r) => ({ ...r.invoice, companyName: r.companyName })), n, q);
   });
 
-  const loadInvoice = async (id: number) => {
-    const [row] = await app.db
-      .select({ invoice: s.invoices, companyName: s.companies.name, company: s.companies })
-      .from(s.invoices)
-      .innerJoin(s.companies, eq(s.companies.id, s.invoices.companyId))
-      .where(eq(s.invoices.id, id));
-    if (!row) throw notFound('Invoice');
-    const lines = await app.db.select().from(s.invoiceLines).where(eq(s.invoiceLines.invoiceId, id)).orderBy(asc(s.invoiceLines.sortOrder), asc(s.invoiceLines.id));
-    return { ...row.invoice, companyName: row.companyName, company: row.company, lines };
-  };
+  const loadInvoice = (id: number) => loadInvoiceRow(app.db, id);
 
   app.get('/invoices/:id', { config: { perm: 'billing.read' } }, async (req) => loadInvoice(idOf(req)));
 
@@ -346,8 +337,30 @@ export async function billingRoutes(app: FastifyInstance) {
   });
 
   app.get('/invoices/:id/pdf', { config: { perm: 'billing.read' } }, async (req, reply) => {
-    const inv = await loadInvoice(idOf(req));
-    const settings = await getSystemSettings(app.db);
+    const { pdf, invoiceNumber } = await invoicePdf(app.db, idOf(req));
+    return reply
+      .header('content-type', 'application/pdf')
+      .header('content-disposition', `attachment; filename="${invoiceNumber}.pdf"`)
+      .send(pdf);
+  });
+}
+
+
+export async function loadInvoiceRow(db: Tx, id: number) {
+  const [row] = await db
+    .select({ invoice: s.invoices, companyName: s.companies.name, company: s.companies })
+    .from(s.invoices)
+    .innerJoin(s.companies, eq(s.companies.id, s.invoices.companyId))
+    .where(eq(s.invoices.id, id));
+  if (!row) throw notFound('Invoice');
+  const lines = await db.select().from(s.invoiceLines).where(eq(s.invoiceLines.invoiceId, id)).orderBy(asc(s.invoiceLines.sortOrder), asc(s.invoiceLines.id));
+  return { ...row.invoice, companyName: row.companyName, company: row.company, lines };
+}
+
+/** The invoice as a PDF (also used by the client portal). */
+export async function invoicePdf(db: Tx, id: number) {
+  const inv = await loadInvoiceRow(db, id);
+    const settings = await getSystemSettings(db);
     const doc = new PDFDocument({ size: 'A4', margin: 50, info: { Title: `Invoice ${inv.invoiceNumber}` } });
     const chunks: Buffer[] = [];
     doc.on('data', (c: Buffer) => chunks.push(c));
@@ -401,10 +414,5 @@ export async function billingRoutes(app: FastifyInstance) {
     if (inv.notes) doc.font('Helvetica').fontSize(9).text(inv.notes, 50, y + 20, { width: 495 });
     if (settings.invoiceFooter) doc.fontSize(8).fillColor('#777').text(settings.invoiceFooter, 50, 780, { width: 495, align: 'center' });
     doc.end();
-    const pdf = await done;
-    return reply
-      .header('content-type', 'application/pdf')
-      .header('content-disposition', `attachment; filename="${inv.invoiceNumber}.pdf"`)
-      .send(pdf);
-  });
+    return { pdf: await done, invoiceNumber: inv.invoiceNumber };
 }

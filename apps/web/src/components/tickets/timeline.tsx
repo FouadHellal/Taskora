@@ -85,7 +85,13 @@ function describeEvent(type: string, d: Record<string, unknown>): { icon: typeof
             </>
           ),
         };
+      if (d.kind === 'created' && d.audience === 'staff') return { icon: Mail, text: <>alerted the IT team (<b>{String(d.to)}</b>) about the new ticket</> };
+      if (d.kind === 'created') return { icon: Mail, text: <>sent the confirmation e-mail to <b>{String(d.to)}</b></> };
+      if (d.kind === 'resolved') return { icon: Mail, text: <>told <b>{String(d.to)}</b> by e-mail that the ticket is resolved</> };
+      if (d.kind === 'client_reply') return { icon: Mail, text: <>alerted the IT team about the client's reply</> };
       return { icon: Mail, text: <>e-mailed the note to <b>{String(d.to)}</b></> };
+    case 'email_skipped':
+      return { icon: Mail, text: <span className="text-warning">did not e-mail <b>{String(d.to)}</b>: {String(d.reason ?? 'skipped')}</span> };
     case 'workflow':
       return { icon: Workflow, text: <>workflow rule <b>{String(d.rule)}</b> ran: {(d.results as string[] | undefined)?.join(', ')}</> };
     default:

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   ACTIVITY_TYPE,
   BILLING_PERIOD,
+  SERVICE_QUANTITY_SOURCE,
   CI_LIFECYCLE,
   CI_RELATION_TYPE,
   COMPANY_TYPE,
@@ -435,6 +436,10 @@ export const contractSchema = z.object({
   billingPeriod: z.enum(BILLING_PERIOD.values).default('monthly'),
   overageRate: optNumber,
   perTicketRate: optNumber,
+  /** Renews for the same term at the end date (shown to the client). */
+  autoRenew: z.boolean().default(false),
+  /** Shown to company managers in the client portal (Billing). */
+  portalVisible: z.boolean().default(true),
   description: optText(10000),
   customFields: customFieldsSchema,
 });
@@ -449,7 +454,9 @@ export const contractBlockSchema = z.object({
 });
 export const contractServiceSchema = z.object({
   serviceId: reqId,
-  quantity: z.coerce.number().positive().default(1),
+  quantity: z.coerce.number().min(0).default(1),
+  /** Quantity follows the service's count (devices of a type, or users) automatically. */
+  autoQuantity: z.boolean().default(false),
   unitPrice: optNumber,
   startDate: optDate,
   /** Last billed day (inclusive); null = until the contract ends. */
@@ -464,6 +471,9 @@ export const serviceSchema = z.object({
   unitPrice: z.coerce.number().min(0).default(0),
   unitCost: optNumber,
   period: z.enum(BILLING_PERIOD.values).default('monthly'),
+  /** Per-device / per-user pricing: what contract lines count when "count automatically" is on. */
+  quantitySource: z.enum(SERVICE_QUANTITY_SOURCE.values).default('manual'),
+  ciTypeId: optId,
   isActive: z.boolean().default(true),
 });
 

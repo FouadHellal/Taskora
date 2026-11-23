@@ -85,6 +85,13 @@
       "when": 1795446911753,
       "tag": "0011_client_portal",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795458609872,
+      "tag": "0012_client_engagement",
+      "breakpoints": true
     }
   ]
 }

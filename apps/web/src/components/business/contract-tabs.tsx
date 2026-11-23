@@ -45,6 +45,9 @@ export interface ContractServiceLine {
   serviceName: string;
   period: string;
   quantity: number;
+  autoQuantity: boolean;
+  quantitySource: 'manual' | 'devices' | 'users';
+  ciTypeName: string | null;
   unitPrice: number;
   startDate: string | null;
   endDate: string | null;
@@ -54,8 +57,12 @@ interface ServiceRow {
   name: string;
   unitPrice: number;
   period: string;
+  quantitySource: 'manual' | 'devices' | 'users';
   isActive: boolean;
 }
+
+const countWhat = (l: { quantitySource: string; ciTypeName?: string | null }) =>
+  l.quantitySource === 'users' ? 'active contacts' : l.ciTypeName ? `active ${l.ciTypeName.toLowerCase()} devices` : 'active devices';
 
 const th = 'border-b border-border bg-surface-2 px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted';
 const td = 'border-b border-border px-3 py-1.5 align-middle';
@@ -460,7 +467,10 @@ export function ContractServicesTab({ contractId, services }: { contractId: numb
                   <td className={td}>{labelOf(BILLING_PERIOD, l.period)}</td>
                   <td className={td}>{fmtDate(l.startDate)}</td>
                   <td className={td}>{l.endDate ? fmtDate(l.endDate) : <span className="text-subtle">—</span>}</td>
-                  <td className={`${td} text-right tabular-nums`}>{l.quantity}</td>
+                  <td className={`${td} text-right tabular-nums`}>
+                    {l.quantity}
+                    {l.autoQuantity && <div className="text-[10px] text-muted">auto · {countWhat(l)}</div>}
+                  </td>
                   <td className={`${td} text-right tabular-nums`}>{money(l.unitPrice)}</td>
                   <td className={`${td} text-right font-medium tabular-nums`}>{money(l.quantity * l.unitPrice)}</td>
                   <td className={`${td} text-right`}>
@@ -510,6 +520,7 @@ export function ContractServicesTab({ contractId, services }: { contractId: numb
 interface LineForm {
   serviceId: number | null;
   quantity: string;
+  autoQuantity: boolean;
   unitPrice: string;
   startDate: string;
   endDate: string;
@@ -520,15 +531,15 @@ function ServiceLineDialog({ contractId, line, onClose }: { contractId: number; 
   const isNew = line === 'new';
   const existing = line && line !== 'new' ? line : null;
   const catalog = useQuery({ queryKey: ['services', 'catalog'], queryFn: () => api.get<{ data: ServiceRow[] }>('/services'), enabled: !!line, staleTime: 60_000 });
-  const [v, setV] = useState<LineForm>({ serviceId: null, quantity: '1', unitPrice: '', startDate: '', endDate: '' });
+  const [v, setV] = useState<LineForm>({ serviceId: null, quantity: '1', autoQuantity: false, unitPrice: '', startDate: '', endDate: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
   useEffect(() => {
     if (!line) return;
     setErrors({});
     setV(
       existing
-        ? { serviceId: existing.serviceId, quantity: String(existing.quantity), unitPrice: String(existing.unitPrice), startDate: existing.startDate ?? '', endDate: existing.endDate ?? '' }
-        : { serviceId: null, quantity: '1', unitPrice: '', startDate: todayIso(), endDate: '' },
+        ? { serviceId: existing.serviceId, quantity: String(existing.quantity), autoQuantity: existing.autoQuantity, unitPrice: String(existing.unitPrice), startDate: existing.startDate ?? '', endDate: existing.endDate ?? '' }
+        : { serviceId: null, quantity: '1', autoQuantity: false, unitPrice: '', startDate: todayIso(), endDate: '' },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [line]);
@@ -538,6 +549,7 @@ function ServiceLineDialog({ contractId, line, onClose }: { contractId: number; 
       existing
         ? api.patch(`/contracts/${contractId}/services/${existing.id}`, {
             quantity: v.quantity,
+            autoQuantity: v.autoQuantity,
             unitPrice: v.unitPrice === '' ? null : v.unitPrice,
             startDate: v.startDate || null,
             endDate: v.endDate || null,
@@ -545,6 +557,7 @@ function ServiceLineDialog({ contractId, line, onClose }: { contractId: number; 
         : api.post(`/contracts/${contractId}/services`, {
             serviceId: v.serviceId,
             quantity: v.quantity,
+            autoQuantity: v.autoQuantity,
             unitPrice: v.unitPrice === '' ? null : v.unitPrice,
             startDate: v.startDate || null,
             endDate: v.endDate || null,
@@ -579,15 +592,27 @@ function ServiceLineDialog({ contractId, line, onClose }: { contractId: number; 
               value={v.serviceId}
               onChange={(id) => {
                 const svc = catalog.data?.data.find((s) => s.id === id);
-                setV((x) => ({ ...x, serviceId: id, unitPrice: svc ? String(svc.unitPrice) : x.unitPrice }));
+                setV((x) => ({ ...x, serviceId: id, unitPrice: svc ? String(svc.unitPrice) : x.unitPrice, autoQuantity: !!svc && svc.quantitySource !== 'manual' }));
               }}
               placeholder="Select from catalog…"
             />
           </FormField>
         )}
+        {(existing ? existing.quantitySource : selected?.quantitySource ?? 'manual') !== 'manual' && (
+          <div className="rounded-md border border-border bg-surface-2 p-2.5">
+            <Checkbox
+              label="Count automatically"
+              checked={v.autoQuantity}
+              onChange={(e) => setV((x) => ({ ...x, autoQuantity: e.target.checked }))}
+            />
+            <p className="ml-6 mt-0.5 text-[11px] text-muted">
+              Quantity = the client’s {existing ? countWhat(existing) : selected?.quantitySource === 'users' ? 'active contacts' : 'active devices of the service’s type'}, updated every day and whenever the contract is opened.
+            </p>
+          </div>
+        )}
         <FormGrid>
           <FormField label="Quantity" required error={errors.quantity}>
-            <Input type="number" min="0" step="0.01" value={v.quantity} onChange={(e) => setV((x) => ({ ...x, quantity: e.target.value }))} />
+            <Input type="number" min="0" step="0.01" value={v.quantity} disabled={v.autoQuantity} onChange={(e) => setV((x) => ({ ...x, quantity: e.target.value }))} />
           </FormField>
           <FormField label="Unit price" error={errors.unitPrice} hint={selected ? `Catalog price ${selected.unitPrice}` : 'Leave empty for the catalog price'}>
             <Input type="number" min="0" step="0.01" value={v.unitPrice} onChange={(e) => setV((x) => ({ ...x, unitPrice: e.target.value }))} />

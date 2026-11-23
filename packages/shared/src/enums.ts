@@ -93,6 +93,13 @@ export const BILLING_PERIOD = labels({
   one_time: 'One-time',
 });
 
+/** What a service is priced per (MSP per-device / per-user pricing). */
+export const SERVICE_QUANTITY_SOURCE = labels({
+  manual: 'Fixed quantity',
+  devices: 'Per device',
+  users: 'Per user',
+});
+
 export const TIME_ENTRY_STATUS = labels({
   draft: 'Draft',
   submitted: 'Submitted',

@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.7.0] — 2026-11-23
+
+### Added
+- **Proactive e-mails** (professional HTML, in the organization language, with your logo):
+  - the **IT team** is alerted about every new ticket — opened by a client, by e-mail or by a technician — and when a client replies in the portal (addresses in *Administration → Client portal*);
+  - **clients** receive a confirmation with the reference when a request is opened (also when the IT team opens it for them), the technician's reply, a notice with the solution when the request is **resolved**, and the monthly report;
+  - each client chooses what they receive in the portal (*My account → E-mails I receive*); managers can ask for a copy of every new request of their company. Recurring maintenance tickets are not announced to clients. Every e-mail is logged on the ticket and never sent twice.
+- **Monthly client reports** (*Insights → Client reports*, and a **Reports** tab on each company): requests opened/resolved, resolution time, response times met, time spent with a 6-month trend, equipment and warranties ending soon, **Action1** patch status and devices needing attention, and an **IT health score** (0–100). Prepare manually or automatically on a chosen day of the month (drafts for review, or published and e-mailed), add a message, hide sections, publish. Managers read them in the portal (*Monthly reports*) and can print them as PDF.
+- **Contract & billing in the client portal** (managers): agreement term and renewal, billing frequency (monthly, quarterly, yearly) and next invoice, every service with its price per unit and quantity, totals per month, per billing period and per year, prepaid hours, rates for work outside the agreement, and invoices with PDF download. Clients cannot change anything.
+- **Per-device / per-user pricing**: a service can be priced *per device* (of a CI type, e.g. Laptop, Desktop, Server) or *per user*; contract lines with **Count automatically** follow the client's active devices or contacts (refreshed daily and whenever the contract is opened).
+- Contracts: **Renews automatically** and **Show in the client portal** options.
+- Client portal: the client's **company logo and name** at the top of the menu; a new **home page** with the IT health gauge, requests waiting for an answer, average resolution time, work trend, device protection, agreement and latest report.
+- Administration → E-mail: **Use Gmail settings** button and app-password instructions.
+
+### Fixed
+- Saving one settings page (e.g. *Administration → Client portal*) no longer resets the other system settings (organization name, currency, time zone…) to their defaults.
+
+### Upgrade notes
+- `bash scripts/update.sh`. Migration `0012_client_engagement` only adds a table (`client_reports`) and columns (`contacts.email_preferences`, `services.quantity_source`, `services.ci_type_id`, `contract_services.auto_quantity`, `contracts.auto_renew`, `contracts.portal_visible`); no existing data is changed. Existing service lines keep their fixed quantity until you tick *Count automatically*.
+- **Check your system settings after the update** (*Administration → System*, *Regional & display*): if you saved the Client portal page in 0.6.0, the organization name, currency or time zone may have been reset to their defaults by the bug fixed above.
+- Set the IT team addresses and turn automatic reports on or off in *Administration → Client portal*.
+
 ## [0.6.0] — 2026-11-23
 
 ### Added

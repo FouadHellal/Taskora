@@ -152,9 +152,26 @@ docker compose exec -e TASKORA_MIGRATION_PASSPHRASE='…' api node dist/cli/migr
 
 Not included: the `.env` file (set `PUBLIC_URL`, HTTPS and ports on the new server; it keeps its own `TASKORA_ENCRYPTION_KEY`), sign-in sessions and old backups. Point n8n and other tools that call Taskora at the new address.
 
-## 6. Client portal
+## 6. Client portal, e-mails, reports and billing
 
-Contacts of your client companies sign in at `https://<your-address>/portal` (also the **Sign in as a client** button on the sign-in page). Give access on a contact (**Client portal** card) or in **Administration → Client portal**: send an invitation e-mail (needs outgoing e-mail and `PUBLIC_URL` so the link points to the right address) or share a generated password. What clients see is set on the same page. Nothing else needs to be configured on the server.
+Contacts of your client companies sign in at `https://<your-address>/portal` (also the **Sign in as a client** button on the sign-in page). Give access on a contact (**Client portal** card) or in **Administration → Client portal**: send an invitation e-mail (needs outgoing e-mail and `PUBLIC_URL` so the link points to the right address) or share a generated password. What clients see is set on the same page.
+
+### Outgoing e-mail with Gmail
+
+Taskora sends every e-mail (IT alerts, client confirmations, monthly reports, invitations) through one SMTP account. With a Gmail or Google Workspace address:
+
+1. Sign in to the Google account, turn on **2-Step Verification** (myaccount.google.com → Security).
+2. Create an **app password** at myaccount.google.com/apppasswords (name it "Taskora") and copy the 16 letters.
+3. In Taskora, **Administration → E-mail**: click **Use Gmail settings** (host `smtp.gmail.com`, port `587`, TLS unticked = STARTTLS), user = the full Gmail address, password = the app password, From = the same address (optionally `Your IT team <address>`). Save, then **Send test e-mail**.
+4. Make sure `PUBLIC_URL` in `.env` is the address clients use (e.g. `https://51.103.217.132`), so the buttons in e-mails open the right page.
+
+Gmail limits a normal account to about 500 messages a day, which is plenty for a service desk. The same can be set with `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` in `.env`; the UI settings take precedence.
+
+### Alerts, reports and billing
+
+- **Administration → Client portal → E-mail notifications**: the IT team addresses alerted about every new ticket and client reply, and the switch for e-mails to clients.
+- **Monthly reports**: prepared on the chosen day for every company with an active contract or portal users (as drafts by default). Review and publish them in **Insights → Client reports**. The worker container does this; nothing else to schedule.
+- **Contract & billing**: put your price list in **Services** (per device of a type, per user, or a fixed quantity), add the services to each client's contract with **Count automatically**, and set the billing period (quarterly, annual…). Company managers see it in the portal.
 
 ## 7. Action1
 

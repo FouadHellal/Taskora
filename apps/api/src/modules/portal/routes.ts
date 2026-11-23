@@ -25,6 +25,8 @@ import { likeTerm, nextSequence } from '../../lib/query.js';
 import { getSystemSettings, type SystemSettings } from '../../lib/settings.js';
 import { addTicketNote, createTicket, updateTicket } from '../tickets/service.js';
 import { runTicketRules } from '../automation/engine.js';
+import { enqueue } from '../../jobs/queue.js';
+import { registerPortalEngagement } from './engagement.js';
 import { resolveSmtp, transportFor } from '../../lib/mail.js';
 import { INLINE_IMAGE_TYPES, portalImageUrls } from '../../lib/note-images.js';
 import { COUNTED_STATUSES, contractBalances } from '../contracts/coverage.js';
@@ -34,7 +36,7 @@ export const PORTAL_COOKIE = 'taskora_portal';
 const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
 export const PORTAL_ROLES = ['user', 'manager'] as const;
 
-interface PortalContact {
+export interface PortalContact {
   id: number;
   companyId: number;
   firstName: string;
@@ -232,6 +234,10 @@ export async function portalRoutes(app: FastifyInstance) {
         if (!req.portalContact || !settings.portalEnabled) return { contact: null, ...branding };
         const c = req.portalContact;
         const [co] = await app.db.select({ name: s.companies.name }).from(s.companies).where(eq(s.companies.id, c.companyId));
+        const [logo] = await app.db
+          .select({ updatedAt: s.logos.updatedAt })
+          .from(s.logos)
+          .where(and(eq(s.logos.entityType, 'company'), eq(s.logos.entityId, c.companyId)));
         return {
           contact: {
             id: c.id,
@@ -240,6 +246,7 @@ export async function portalRoutes(app: FastifyInstance) {
             email: c.email,
             companyId: c.companyId,
             companyName: co?.name ?? '',
+            companyLogoUpdatedAt: logo?.updatedAt ?? null,
             isManager: c.isManager,
             // Kept for older clients of this endpoint.
             seesCompanyTickets: c.isManager,
@@ -251,6 +258,8 @@ export async function portalRoutes(app: FastifyInstance) {
             docs: settings.portalAllowDocs,
             priority: settings.portalAllowPriority,
             attachments: settings.portalAllowAttachments,
+            reports: settings.portalShowReports && c.isManager,
+            billing: settings.portalShowBilling && c.isManager,
           },
           welcome: settings.portalWelcome,
           ...branding,
@@ -557,8 +566,8 @@ export async function portalRoutes(app: FastifyInstance) {
         const c = contactOf(req);
         const t = await loadTicket(c, idOf(req));
         const input = replySchema.parse(req.body);
-        await app.db.transaction(async (tx) => {
-          await addTicketNote({ db: tx, userId: null }, t.id, { body: `${c.firstName} ${c.lastName} wrote:\n\n${input.body}`, visibility: 'public', kind: 'portal' });
+        const note = await app.db.transaction(async (tx) => {
+          const n = await addTicketNote({ db: tx, userId: null }, t.id, { body: `${c.firstName} ${c.lastName} wrote:\n\n${input.body}`, visibility: 'public', kind: 'portal' });
           if (['waiting', 'resolved'].includes(t.statusCategory)) {
             const [open] = await tx
               .select({ id: s.ticketStatuses.id })
@@ -568,8 +577,10 @@ export async function portalRoutes(app: FastifyInstance) {
               .limit(1);
             if (open) await updateTicket({ db: tx, userId: null }, t.id, { statusId: open.id });
           }
+          return n;
         });
         await runTicketRules(app.db, 'ticket.updated', t.id);
+        await enqueue(app.db, 'email.client_reply', { noteId: note.id }, { maxAttempts: 3 });
         return reply.status(201).send({ ok: true });
       });
 
@@ -616,7 +627,7 @@ export async function portalRoutes(app: FastifyInstance) {
           const rows = await app.db
             .select({ id: s.contracts.id, name: s.contracts.name, contractNumber: s.contracts.contractNumber, type: s.contracts.type, status: s.contracts.status, startDate: s.contracts.startDate, endDate: s.contracts.endDate })
             .from(s.contracts)
-            .where(and(eq(s.contracts.companyId, c.companyId), eq(s.contracts.status, 'active')))
+            .where(and(eq(s.contracts.companyId, c.companyId), eq(s.contracts.status, 'active'), eq(s.contracts.portalVisible, true)))
             .orderBy(asc(s.contracts.name));
           const balances = await contractBalances(app.db, rows.map((r) => r.id));
           contracts = rows.map((r) => {
@@ -829,6 +840,8 @@ export async function portalRoutes(app: FastifyInstance) {
         await app.db.delete(s.portalSessions).where(and(eq(s.portalSessions.contactId, c.id), sql`${s.portalSessions.id} <> ${c.sessionId}`));
         return { ok: true };
       });
+
+      registerPortalEngagement(portal, app, { contactOf, settings: () => settings, visibleTickets });
     },
     { prefix: '/api/portal' },
   );

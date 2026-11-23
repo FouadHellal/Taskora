@@ -1,7 +1,7 @@
 import { createContext, Fragment, lazy, Suspense, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { BookOpen, Building2, Clock, FileText, HardDrive, Home, LogOut, Menu, Plus, Ticket, UserRound, X } from 'lucide-react';
+import { BarChart3, BookOpen, Building2, Clock, FileText, HardDrive, Home, LogOut, Menu, Plus, Receipt, Ticket, UserRound, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { isLang, loadLanguage, setLanguage, translate as t, type Lang } from '@/lib/i18n';
 import { cn, setDateConfig } from '@/lib/utils';
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input, Label } from '@/components/ui/input';
 import { PageLoader } from '@/components/ui/misc';
 import { logoUrl } from '@/components/logo';
-import { papi, setPortalCsrf, storedPortalLanguage, storePortalLanguage, usePortalMe, type Me } from './lib';
+import { companyLogoUrl, papi, setPortalCsrf, storedPortalLanguage, storePortalLanguage, usePortalMe, type Me } from './lib';
 
 const PortalHome = lazy(() => import('./home'));
 const PortalTickets = lazy(() => import('./tickets'));
@@ -17,6 +17,8 @@ const PortalWork = lazy(() => import('./work'));
 const PortalDevices = lazy(() => import('./devices'));
 const PortalDocs = lazy(() => import('./docs'));
 const PortalProfile = lazy(() => import('./profile'));
+const PortalReports = lazy(() => import('./reports'));
+const PortalBilling = lazy(() => import('./billing'));
 
 /* ------------------------------------------------------------------ language */
 
@@ -84,6 +86,8 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
     { to: '/portal', label: 'Home', icon: Home, end: true },
     { to: '/portal/tickets', label: c.isManager ? 'Tickets' : 'My tickets', icon: Ticket },
     f.time && { to: '/portal/work', label: 'Work & hours', icon: Clock },
+    f.reports && { to: '/portal/reports', label: 'Monthly reports', icon: BarChart3 },
+    f.billing && { to: '/portal/billing', label: 'Contract & billing', icon: Receipt },
     f.devices && { to: '/portal/devices', label: c.isManager ? 'Devices' : 'My devices', icon: HardDrive },
     f.docs && { to: '/portal/docs', label: 'Documentation', icon: FileText },
     { to: '/portal/kb', label: 'Help articles', icon: BookOpen },
@@ -98,22 +102,33 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
   };
 
   const logo = logoUrl('organization', 0, me.logoUpdatedAt);
+  const companyLogo = companyLogoUrl(c.companyLogoUpdatedAt);
   const sidebar = (
     <div className="flex h-full flex-col">
-      <Link to="/portal" className="flex items-center gap-2.5 px-4 pb-3 pt-4">
-        <img src={logo ?? '/favicon.svg'} alt="" className={logo ? 'h-8 max-w-32 object-contain' : 'size-7'} />
-        <div className="min-w-0 leading-tight">
-          <div className="truncate text-[13px] font-semibold">{me.organizationName}</div>
-          <div className="text-[11px] text-muted">{t('Client portal')}</div>
+      {/* The client's own company comes first: logo and name. */}
+      <Link to="/portal" className="mx-3 mb-3 mt-4 block overflow-hidden rounded-xl border border-border bg-surface-2">
+        <div className="flex h-20 items-center justify-center bg-surface px-4">
+          {companyLogo ? (
+            <img src={companyLogo} alt={c.companyName} className="max-h-14 max-w-full object-contain" />
+          ) : (
+            <span className="flex size-12 items-center justify-center rounded-full bg-primary text-lg font-semibold text-white">
+              {c.companyName
+                .split(/\s+/)
+                .slice(0, 2)
+                .map((w) => w[0])
+                .join('')
+                .toUpperCase()}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 border-t border-border px-3 py-2">
+          <Building2 className="size-4 shrink-0 text-primary" />
+          <div className="min-w-0 leading-tight">
+            <div className="truncate text-[13px] font-semibold">{c.companyName}</div>
+            <div className="text-[11px] text-muted">{c.isManager ? t('Company manager') : t('User')}</div>
+          </div>
         </div>
       </Link>
-      <div className="mx-3 mb-3 flex items-center gap-2 rounded-md border border-border bg-surface-2 px-2.5 py-2">
-        <Building2 className="size-4 shrink-0 text-primary" />
-        <div className="min-w-0 leading-tight">
-          <div className="truncate text-[12px] font-medium">{c.companyName}</div>
-          <div className="text-[11px] text-muted">{c.isManager ? t('Company manager') : t('User')}</div>
-        </div>
-      </div>
       <div className="px-3 pb-2">
         <Button variant="primary" className="w-full" onClick={() => navigate('/portal/tickets/new')}>
           <Plus /> New request
@@ -133,6 +148,12 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
           </NavLink>
         ))}
       </nav>
+      <div className="flex items-center gap-2 border-t border-border px-4 py-2.5">
+        <img src={logo ?? '/favicon.svg'} alt="" className={logo ? 'h-5 max-w-20 object-contain' : 'size-5'} />
+        <div className="min-w-0 text-[11px] leading-tight text-muted">
+          {t('Supported by')} <span className="font-medium text-foreground">{me.organizationName}</span>
+        </div>
+      </div>
       <div className="border-t border-border p-3">
         <div className="mb-2 truncate text-[12px]">
           <div className="truncate font-medium">
@@ -150,14 +171,15 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 hidden w-60 border-r border-border bg-surface md:block">{sidebar}</aside>
+      <aside className="fixed inset-y-0 left-0 hidden w-60 border-r border-border bg-surface md:block print:hidden">{sidebar}</aside>
       {/* Phone: top bar + slide-in menu */}
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface px-3 md:hidden">
+      <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border bg-surface px-3 md:hidden print:hidden">
         <Button variant="ghost" size="sm" aria-label={t('Menu')} onClick={() => setMenu(true)}>
           <Menu />
         </Button>
-        <Link to="/portal" className="min-w-0 flex-1 truncate text-[14px] font-semibold">
-          {me.organizationName}
+        <Link to="/portal" className="flex min-w-0 flex-1 items-center gap-2 truncate text-[14px] font-semibold">
+          {companyLogo && <img src={companyLogo} alt="" className="h-7 max-w-24 object-contain" />}
+          <span className="truncate">{c.companyName}</span>
         </Link>
         <Button size="sm" variant="primary" onClick={() => navigate('/portal/tickets/new')} aria-label={t('New request')}>
           <Plus />
@@ -174,7 +196,7 @@ function Shell({ me, children }: { me: Me; children: ReactNode }) {
           </aside>
         </div>
       )}
-      <main className="md:pl-60">
+      <main className="md:pl-60 print:pl-0">
         <div className="mx-auto max-w-5xl p-4 sm:p-6">
           <Suspense fallback={<PageLoader />}>{children}</Suspense>
         </div>
@@ -358,6 +380,8 @@ function Authenticated() {
         <Route path="docs/*" element={<PortalDocs me={me.data} kind="docs" />} />
         <Route path="kb/*" element={<PortalDocs me={me.data} kind="kb" />} />
         <Route path="profile" element={<PortalProfile me={me.data} />} />
+        {me.data.features?.reports && <Route path="reports/*" element={<PortalReports me={me.data} />} />}
+        {me.data.features?.billing && <Route path="billing" element={<PortalBilling me={me.data} />} />}
         <Route path="*" element={<Navigate to="/portal" replace />} />
       </Routes>
     </Shell>

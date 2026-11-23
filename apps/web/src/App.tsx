@@ -68,6 +68,8 @@ const AdminAudit = page(() => import('./pages/admin/audit'));
 const AdminImport = page(() => import('./pages/admin/import'));
 const AdminEmail = page(() => import('./pages/admin/email'));
 const AdminClientPortal = page(() => import('./pages/admin/client-portal'));
+const ClientReports = page(() => import('./pages/client-reports/index'));
+const ClientReportDetail = page(() => import('./pages/client-reports/detail'));
 const AdminBackups = page(() => import('./pages/admin/backups'));
 const SettingsHub = page(() => import('./pages/settings/index'));
 const Help = page(() => import('./pages/help/index'));
@@ -183,6 +185,8 @@ export function App() {
         {r('/kb/:id/edit', KbEditor, 'kb.write')}
         {r('/documentation', Documentation, 'kb.read')}
         {r('/reports', Reports, 'reports.read')}
+        {r('/client-reports', ClientReports, 'companies.read')}
+        {r('/client-reports/:id', ClientReportDetail, 'companies.read')}
         {r('/analytics', Analytics, 'reports.read')}
         {r('/admin/users', AdminUsers, 'users.manage')}
         {r('/admin/ticket-settings', AdminTicketSettings, 'settings.manage')}

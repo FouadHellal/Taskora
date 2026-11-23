@@ -57,6 +57,24 @@ export const systemSettingsSchema = z.object({
   portalAllowPriority: z.boolean().default(true),
   /** Let contacts attach files to their requests. */
   portalAllowAttachments: z.boolean().default(true),
+  /** Show monthly reports to portal managers. */
+  portalShowReports: z.boolean().default(true),
+  /** Show the service agreement, prices and invoices to portal managers. */
+  portalShowBilling: z.boolean().default(true),
+  /* E-mail notifications (sent through Administration → E-mail). */
+  /** IT team addresses alerted about every new ticket (comma separated). */
+  staffAlertEmails: z.string().max(2000).default(''),
+  /** Alert those addresses when a ticket is created (by a client or the IT team). */
+  staffAlertOnNewTicket: z.boolean().default(true),
+  /** Alert those addresses when a client replies in the portal. */
+  staffAlertOnClientReply: z.boolean().default(true),
+  /** Master switch for e-mails to clients (confirmation, resolved, monthly report). Each contact can still opt out. */
+  clientEmailsEnabled: z.boolean().default(true),
+  /* Monthly client reports. */
+  /** 'off', 'draft' (prepared for review) or 'publish' (published and e-mailed automatically). */
+  reportsAutoMode: z.enum(['off', 'draft', 'publish']).default('draft'),
+  /** Day of the month on which last month's reports are prepared (1–28). */
+  reportsAutoDay: z.coerce.number().int().min(1).max(28).default(1),
 });
 export type SystemSettings = z.infer<typeof systemSettingsSchema>;
 

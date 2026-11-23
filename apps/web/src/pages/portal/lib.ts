@@ -43,6 +43,8 @@ export interface PortalFeatures {
   docs: boolean;
   priority: boolean;
   attachments: boolean;
+  reports: boolean;
+  billing: boolean;
 }
 
 export interface Me {
@@ -53,6 +55,7 @@ export interface Me {
     email: string;
     companyId: number;
     companyName: string;
+    companyLogoUpdatedAt?: string | null;
     isManager: boolean;
   } | null;
   features?: PortalFeatures;
@@ -142,3 +145,40 @@ export function storePortalLanguage(lang: string | null) {
     /* private mode */
   }
 }
+
+/** The client's company logo (served by the portal API), or null when the company has none. */
+export function companyLogoUrl(updatedAt: string | null | undefined) {
+  return updatedAt ? `/api/portal/company-logo?v=${encodeURIComponent(updatedAt)}` : null;
+}
+
+/** Amount in the organization currency, e.g. "2 360 DZD" / "2,360.00 €". */
+export function fmtMoney(n: number | null | undefined, currency: string, lang?: string) {
+  const v = Number(n ?? 0);
+  try {
+    return new Intl.NumberFormat(lang, { style: 'currency', currency, maximumFractionDigits: Number.isInteger(v) ? 0 : 2 }).format(v);
+  } catch {
+    return `${v.toLocaleString(lang)} ${currency}`;
+  }
+}
+
+/** "November 2026" in the portal language. */
+export function monthName(period: string, lang?: string, short = false) {
+  const [y, m] = period.split('-').map(Number);
+  return new Intl.DateTimeFormat(lang, { month: short ? 'short' : 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(Date.UTC(y!, m! - 1, 1)));
+}
+
+export type HealthGrade = 'excellent' | 'good' | 'fair' | 'poor';
+export interface Health {
+  score: number | null;
+  grade: HealthGrade | null;
+  parts: { key: string; score: number; weight: number }[];
+}
+export const HEALTH_LABEL: Record<HealthGrade, string> = { excellent: 'Excellent', good: 'Good', fair: 'Needs attention', poor: 'At risk' };
+export const HEALTH_COLOR: Record<HealthGrade, string> = { excellent: '#16a34a', good: '#2563eb', fair: '#d97706', poor: '#dc2626' };
+export const HEALTH_PART_LABEL: Record<string, string> = {
+  patching: 'Security updates',
+  sla: 'Response times met',
+  resolution: 'Requests resolved',
+  online: 'Devices checking in',
+  reboots: 'No pending restarts',
+};

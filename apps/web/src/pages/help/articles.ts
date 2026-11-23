@@ -231,7 +231,23 @@ The **client portal** is a separate, simpler website for the contacts of your cl
 - Customer-visible notes (*Public* visibility) appear in the portal conversation; internal notes never do.
 - Files on a ticket are hidden from the client until you click the **eye** button next to the file. Files the client uploaded are marked *From client*.
 - Company documentation pages with visibility **Public (client portal)** and status *Published* are shown to that company. Pages clients write appear in the company's **Documentation** tab, marked *Written by the client*.
-- Choose what the portal shows (work, devices, contracts, documentation, priority, attachments) and a welcome message in [Administration → Client portal](/admin/portal).
+- Choose what the portal shows (work, devices, contracts, documentation, priority, attachments, reports, billing) and a welcome message in [Administration → Client portal](/admin/portal).
+
+### E-mails
+- **IT team alert**: every new ticket (opened by a client, by e-mail or by the IT team) is e-mailed to the **IT team addresses** set in [Administration → Client portal](/admin/portal), and so is every client reply in the portal.
+- **Client e-mails** (professional HTML, in your organization language): confirmation with the reference when a request is opened, the reply when a technician ticks *E-mail the contact*, a notice with the solution when it is **resolved**, and the **monthly report**.
+- Each client chooses what they receive in the portal under **My account → E-mails I receive**. Managers can also ask for a copy of every new request of their company.
+- E-mails go out through [Administration → E-mail](/admin/email). For Gmail: host *smtp.gmail.com*, port *587*, TLS unticked, the full address as user and an **app password** (Google account → Security → 2-Step Verification → App passwords).
+
+### Monthly reports
+- [Client reports](/client-reports) (also the **Reports** tab of a company): **Prepare a report** for a month. Taskora takes the figures of that month: requests opened and resolved, resolution time, response times met, time spent, devices, warranties and the **Action1** patch status, plus an **IT health score** out of 100.
+- Add a **message** (what you did, what you recommend), hide sections if needed, and **Publish**: company managers see it under **Monthly reports** and get an e-mail.
+- Automatic: on the chosen day of each month, last month's reports are prepared as drafts (or published directly) for every company with an active contract or portal users.
+
+### Contract & billing (pricing)
+- Managers see their **service agreement**: term, renewal, how often it is billed (monthly, quarterly, yearly), each service with its **price per unit**, the quantity and the totals per month, per billing period and per year, the prepaid hours, the rate for work outside the agreement, and their invoices (PDF).
+- Price per device or per user: in [Services](/services) set *Quantity* to **Per device** (and the device type, e.g. Laptop 180, Desktop 150, Server 2000) or **Per user**. On the contract, add the service with **Count automatically**: the quantity follows the client's active devices or contacts every day.
+- Untick **Show in the client portal** on a contract to keep it internal. Clients can never change prices.
 `,
   },
   {

@@ -79,6 +79,22 @@ export default function EmailSettingsPage() {
             )}
             {d.passwordError && <p className="rounded-md bg-warning-soft px-3 py-2 text-xs text-warning">{d.passwordError} — re-enter the password.</p>}
             <Checkbox label="Send e-mail with these settings" checked={f.enabled} onChange={(e) => set('enabled', e.target.checked)} />
+            <div className="rounded-md border border-border bg-surface-2 px-3 py-2.5 text-xs">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-medium">Gmail / Google Workspace:</span>
+                <span className="text-muted">host smtp.gmail.com · port 587 · TLS unticked (STARTTLS) · user = the full Gmail address · password = an app password · From = the same address.</span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setF((x) => ({ ...x, enabled: true, host: 'smtp.gmail.com', port: 587, secure: false, from: x.from || x.user, user: x.user }))}
+                >
+                  Use Gmail settings
+                </Button>
+              </div>
+              <p className="mt-1 text-muted">
+                Google does not accept the normal password: turn on 2-Step Verification for the account, then create an app password at myaccount.google.com/apppasswords and paste its 16 letters here.
+              </p>
+            </div>
             <FormSection title="Server">
               <FormGrid cols={3}>
                 <FormField label="SMTP host" required={f.enabled}>

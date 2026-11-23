@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { CheckCircle2, KeyRound, Languages, Monitor, Moon, Sun, Users } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CheckCircle2, KeyRound, Languages, Mail, Monitor, Moon, Sun, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { LANGUAGES, translate as t, type Lang } from '@/lib/i18n';
 import { cn, fmtRelative } from '@/lib/utils';
@@ -9,6 +9,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { Button } from '@/components/ui/button';
 import { Input, Label, Select } from '@/components/ui/input';
 import { Card, CardBody, CardHeader, PageLoader } from '@/components/ui/misc';
+import { Switch } from '@/components/admin/switch';
 import { papi, storedPortalLanguage, type Me } from './lib';
 import { usePortalLanguage } from './index';
 
@@ -105,6 +106,8 @@ export default function PortalProfile({ me }: { me: Me }) {
           </CardBody>
         </Card>
 
+        <EmailPreferences />
+
         <Card>
           <CardHeader title={<span className="inline-flex items-center gap-1.5"><Languages className="size-4 text-primary" /> {t('Display')}</span>} />
           <CardBody className="space-y-4 text-[13px]">
@@ -182,5 +185,66 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
       <span className="w-28 shrink-0 text-muted">{t(label)}</span>
       <span className="min-w-0 flex-1 break-words">{children || '—'}</span>
     </div>
+  );
+}
+
+type PrefKey = 'ticketCreated' | 'ticketReplies' | 'ticketResolved' | 'monthlyReport' | 'companyTickets';
+interface Prefs {
+  email: string | null;
+  preferences: Record<PrefKey, boolean>;
+  isManager: boolean;
+  clientEmailsEnabled: boolean;
+}
+
+const PREF_ROWS: { key: PrefKey; label: string; hint: string; managers?: boolean }[] = [
+  { key: 'ticketCreated', label: 'Confirmation of my new requests', hint: 'With the reference number of the request.' },
+  { key: 'ticketReplies', label: 'Replies from the IT team', hint: 'When a technician answers one of my requests.' },
+  { key: 'ticketResolved', label: 'Request resolved', hint: 'With the solution, so I can check it works.' },
+  { key: 'monthlyReport', label: 'Monthly report available', hint: 'A short summary with a link to the report.', managers: true },
+  { key: 'companyTickets', label: 'Every new request of my company', hint: 'A copy when a colleague opens a request.', managers: true },
+];
+
+/** Which e-mails the contact receives. */
+function EmailPreferences() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['portal-email-prefs'], queryFn: () => papi<Prefs>('GET', '/profile/notifications') });
+  const save = useMutation({
+    mutationFn: (patch: Partial<Record<PrefKey, boolean>>) => papi<{ preferences: Prefs['preferences'] }>('PUT', '/profile/notifications', patch),
+    onSuccess: (r) => {
+      qc.setQueryData<Prefs>(['portal-email-prefs'], (old) => (old ? { ...old, preferences: r.preferences } : old));
+      toast.success(t('Saved'));
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const p = q.data;
+  return (
+    <Card>
+      <CardHeader
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            <Mail className="size-4 text-primary" /> {t('E-mails I receive')}
+          </span>
+        }
+        description={p?.email ? t('Sent to {email}', { email: p.email }) : t('Your contact has no e-mail address: ask your IT team to add one.')}
+      />
+      <CardBody className="space-y-3 text-[13px]">
+        {!p ? (
+          <PageLoader />
+        ) : (
+          <>
+            {!p.clientEmailsEnabled && <p className="rounded bg-warning-soft px-3 py-2 text-[12px] text-warning">{t('E-mails to clients are currently turned off by your IT team.')}</p>}
+            {PREF_ROWS.filter((r) => !r.managers || p.isManager).map((r) => (
+              <div key={r.key} className="flex items-start gap-3">
+                <Switch checked={p.preferences[r.key]} disabled={save.isPending || !p.email} onChange={(v) => save.mutate({ [r.key]: v })} label={undefined} />
+                <div className="leading-tight">
+                  <div className="font-medium">{t(r.label)}</div>
+                  <div className="text-[11px] text-muted">{t(r.hint)}</div>
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+      </CardBody>
+    </Card>
   );
 }

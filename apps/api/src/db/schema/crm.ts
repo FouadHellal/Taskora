@@ -1,4 +1,4 @@
-import { boolean, date, index, integer, pgTable, text, timestamp, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
+import { boolean, date, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { createdAt, customFields, id, money, slaPolicies, updatedAt, users } from './core.js';
 
@@ -90,6 +90,8 @@ export const contacts = pgTable(
     portalResetExpiresAt: timestamp('portal_reset_expires_at', { withTimezone: true }),
     /** 'user' sees their own tickets; 'manager' sees every ticket, the work and the contracts of the company (primary contacts always do). */
     portalRole: text('portal_role').notNull().default('user'),
+    /** Which e-mails the contact receives (ticketCreated, ticketReplies, ticketResolved, monthlyReport, companyTickets); missing keys use the defaults. */
+    emailPreferences: jsonb('email_preferences').$type<Record<string, boolean>>().notNull().default(sql`'{}'::jsonb`),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -1,3 +1,4 @@
+import { refreshAutoQuantities } from './quantities.js';
 import type { FastifyInstance } from 'fastify';
 import { and, asc, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import { contractBlockSchema, contractExclusionsSchema, contractRateSchema, contractSchema, contractServiceSchema, formatNumber } from '@taskora/shared';
@@ -123,6 +124,7 @@ export async function contractRoutes(app: FastifyInstance) {
       .leftJoin(s.contacts, eq(s.contacts.id, s.contracts.contactId))
       .where(eq(s.contracts.id, id));
     if (!row) throw notFound('Contract');
+    await refreshAutoQuantities(app.db, { contractId: id });
     const [rates, blocks, services, exclusions] = await Promise.all([
       app.db
         .select({ id: s.contractRates.id, workTypeId: s.contractRates.workTypeId, workTypeName: s.workTypes.name, hourlyRate: s.contractRates.hourlyRate })
@@ -137,12 +139,16 @@ export async function contractRoutes(app: FastifyInstance) {
           serviceName: s.services.name,
           period: s.services.period,
           quantity: s.contractServices.quantity,
+          autoQuantity: s.contractServices.autoQuantity,
+          quantitySource: s.services.quantitySource,
+          ciTypeName: s.ciTypes.name,
           unitPrice: s.contractServices.unitPrice,
           startDate: s.contractServices.startDate,
           endDate: s.contractServices.endDate,
         })
         .from(s.contractServices)
         .innerJoin(s.services, eq(s.services.id, s.contractServices.serviceId))
+        .leftJoin(s.ciTypes, eq(s.ciTypes.id, s.services.ciTypeId))
         .where(eq(s.contractServices.contractId, id))
         .orderBy(asc(s.services.name)),
       app.db
@@ -324,8 +330,17 @@ export async function contractRoutes(app: FastifyInstance) {
     if (input.startDate && input.endDate && input.endDate < input.startDate) throw badRequest('End date is before start date', { fields: { endDate: 'Must be after the start date' } });
     const [row] = await app.db
       .insert(s.contractServices)
-      .values({ contractId: id, serviceId: input.serviceId, quantity: input.quantity, unitPrice: input.unitPrice ?? svc.unitPrice, startDate: input.startDate, endDate: input.endDate })
+      .values({
+        contractId: id,
+        serviceId: input.serviceId,
+        quantity: input.quantity,
+        autoQuantity: input.autoQuantity && svc.quantitySource !== 'manual',
+        unitPrice: input.unitPrice ?? svc.unitPrice,
+        startDate: input.startDate,
+        endDate: input.endDate,
+      })
       .returning();
+    if (row!.autoQuantity) await refreshAutoQuantities(app.db, { contractId: id });
     await audit(app.db, req, { action: 'update', entityType: 'contract', entityId: id, summary: `Service ${svc.name} added` });
     return reply.status(201).send(row);
   });
@@ -337,6 +352,7 @@ export async function contractRoutes(app: FastifyInstance) {
     if (!before) throw notFound('Contract service');
     const data: Partial<typeof before> = {};
     if ('quantity' in input) data.quantity = input.quantity!;
+    if ('autoQuantity' in input) data.autoQuantity = !!input.autoQuantity;
     if ('unitPrice' in input && input.unitPrice != null) data.unitPrice = input.unitPrice;
     if ('startDate' in input) data.startDate = input.startDate ?? null;
     if ('endDate' in input) data.endDate = input.endDate ?? null;
@@ -345,6 +361,7 @@ export async function contractRoutes(app: FastifyInstance) {
     if (start && end && end < start) throw badRequest('End date is before start date', { fields: { endDate: 'Must be after the start date' } });
     if (!Object.keys(data).length) return before;
     const [row] = await app.db.update(s.contractServices).set(data).where(eq(s.contractServices.id, lineId)).returning();
+    if (row!.autoQuantity) await refreshAutoQuantities(app.db, { contractId: id });
     await audit(app.db, req, { action: 'update', entityType: 'contract', entityId: id, summary: `Service line ${lineId} updated`, changes: diff(before, data) });
     return row;
   });

@@ -1,5 +1,6 @@
 import {
   Activity,
+  FileBarChart,
   BarChart3,
   Bell,
   BookOpen,
@@ -198,6 +199,7 @@ export const NAV: NavSection[] = [
     items: [
       { label: 'Reports', to: '/reports', icon: BarChart3, perm: 'reports.read' },
       { label: 'Analytics', to: '/analytics', icon: Activity, perm: 'reports.read' },
+      { label: 'Client reports', to: '/client-reports', icon: FileBarChart, perm: 'companies.read' },
     ],
   },
   {

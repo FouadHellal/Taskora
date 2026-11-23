@@ -204,10 +204,14 @@ export async function settingsRoutes(app: FastifyInstance) {
   app.get('/settings/system', async () => getSystemSettings(app.db));
   app.put('/settings/system', { config: { perm: W } }, async (req) => {
     // Logo and backup schedule have their own endpoints (and permissions); ignore them here.
-    const patch = systemSettingsSchema
+    const body = (req.body ?? {}) as Record<string, unknown>;
+    const parsed = systemSettingsSchema
       .omit({ logoUpdatedAt: true, autoBackupEnabled: true, autoBackupIntervalHours: true, backupRetention: true })
       .partial()
-      .parse(req.body);
+      .parse(body);
+    // Zod's .partial() still fills .default() values: keep only the keys that were sent,
+    // so saving one settings page never resets the others.
+    const patch = Object.fromEntries(Object.entries(parsed).filter(([k]) => k in body)) as typeof parsed;
     const saved = await saveSystemSettings(app.db, patch);
     await audit(app.db, req, { action: 'update', entityType: 'system_settings', changes: patch });
     return saved;

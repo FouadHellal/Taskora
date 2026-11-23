@@ -148,6 +148,9 @@ export const services = pgTable('services', {
   unitPrice: money('unit_price').notNull().default(0),
   unitCost: money('unit_cost'),
   period: text('period').notNull().default('monthly'),
+  /** How a contract line can count its quantity: 'manual', 'devices' (active CIs of ciTypeId) or 'users' (active contacts). */
+  quantitySource: text('quantity_source').notNull().default('manual'),
+  ciTypeId: integer('ci_type_id').references(() => ciTypes.id, { onDelete: 'set null' }),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
@@ -177,6 +180,10 @@ export const contracts = pgTable(
     overageRate: money('overage_rate'),
     /** Per-ticket contracts: fee billed once for every ticket resolved under the contract. */
     perTicketRate: money('per_ticket_rate'),
+    /** Renews for the same term at the end date (shown to the client). */
+    autoRenew: boolean('auto_renew').notNull().default(false),
+    /** Shown to company managers in the client portal (Billing). */
+    portalVisible: boolean('portal_visible').notNull().default(true),
     description: text('description'),
     customFields: customFields(),
     createdAt: createdAt(),
@@ -223,6 +230,8 @@ export const contractServices = pgTable('contract_services', {
     .notNull()
     .references(() => services.id),
   quantity: hours('quantity').notNull().default(1),
+  /** Quantity follows the service's count (devices of a type or users) and is refreshed automatically. */
+  autoQuantity: boolean('auto_quantity').notNull().default(false),
   unitPrice: money('unit_price').notNull(),
   startDate: date('start_date', { mode: 'string' }),
   /** Last day the service is billed (inclusive); null = until the contract ends. */
@@ -776,4 +785,34 @@ export const workflowExecutions = pgTable(
     index('wf_exec_rule_idx').on(t.ruleId, t.executedAt),
     uniqueIndex('wf_exec_dedupe_uq').on(t.ruleId, t.dedupeKey).where(sql`${t.dedupeKey} is not null`),
   ],
+);
+
+/* ---------------------------------------------------------- client reports */
+
+/** Monthly report published to a client company in the portal (data is a snapshot taken when generated). */
+export const clientReports = pgTable(
+  'client_reports',
+  {
+    id: id(),
+    companyId: integer('company_id')
+      .notNull()
+      .references(() => companies.id, { onDelete: 'cascade' }),
+    /** Month covered, YYYY-MM. */
+    period: text('period').notNull(),
+    title: text('title').notNull(),
+    /** Message from the IT team (Markdown). */
+    summary: text('summary').notNull().default(''),
+    data: jsonb('data').$type<Record<string, unknown>>().notNull().default(sql`'{}'::jsonb`),
+    /** Sections hidden from the client (tickets, work, devices, security). */
+    hiddenSections: text('hidden_sections').array().notNull().default(sql`'{}'::text[]`),
+    status: text('status').notNull().default('draft'),
+    source: text('source').notNull().default('manual'),
+    createdById: integer('created_by_id').references(() => users.id, { onDelete: 'set null' }),
+    publishedAt: timestamp('published_at', { withTimezone: true }),
+    publishedById: integer('published_by_id').references(() => users.id, { onDelete: 'set null' }),
+    emailedAt: timestamp('emailed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex('client_reports_company_period_uq').on(t.companyId, t.period), index('client_reports_status_idx').on(t.status, t.publishedAt)],
 );

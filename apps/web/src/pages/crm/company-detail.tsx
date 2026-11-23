@@ -1,3 +1,4 @@
+import { ClientReportList } from '@/pages/client-reports/index';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -147,6 +148,7 @@ export default function CompanyDetailPage() {
               Locations
             </TabsTrigger>
             <TabsTrigger value="docs">Documentation</TabsTrigger>
+            <TabsTrigger value="reports">Reports</TabsTrigger>
             <TabsTrigger value="activity">Activity</TabsTrigger>
             <TabsTrigger value="notes">Notes & files</TabsTrigger>
           </TabsList>
@@ -311,6 +313,9 @@ export default function CompanyDetailPage() {
           </TabsContent>
           <TabsContent value="docs" className="mt-4">
             <CompanyDocs companyId={id} canWrite={can('kb.write')} />
+          </TabsContent>
+          <TabsContent value="reports" className="mt-4">
+            <ClientReportList companyId={id} compact />
           </TabsContent>
           <TabsContent value="activity" className="mt-4">
             <ActivityFeed companyId={id} canWrite={can('companies.write')} />

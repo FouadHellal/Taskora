@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Building2, ExternalLink, Save, UserPlus, Users } from 'lucide-react';
+import { BarChart3, Building2, ExternalLink, Mail, Save, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
@@ -9,7 +9,7 @@ import { translate as t } from '@/lib/i18n';
 import { fmtRelative } from '@/lib/utils';
 import { PageHeader } from '@/components/page';
 import { Button } from '@/components/ui/button';
-import { Checkbox, Select, Textarea } from '@/components/ui/input';
+import { Checkbox, Input, Select, Textarea } from '@/components/ui/input';
 import { Badge, Card, CardBody, CardHeader, EmptyState, PageLoader, Stat } from '@/components/ui/misc';
 import { Dialog } from '@/components/ui/overlays';
 import { EntityPicker } from '@/components/entity-picker';
@@ -25,7 +25,34 @@ interface PortalSettings {
   portalAllowDocs: boolean;
   portalAllowPriority: boolean;
   portalAllowAttachments: boolean;
+  portalShowReports: boolean;
+  portalShowBilling: boolean;
+  staffAlertEmails: string;
+  staffAlertOnNewTicket: boolean;
+  staffAlertOnClientReply: boolean;
+  clientEmailsEnabled: boolean;
+  reportsAutoMode: 'off' | 'draft' | 'publish';
+  reportsAutoDay: number;
 }
+
+const SETTING_KEYS: (keyof PortalSettings)[] = [
+  'portalEnabled',
+  'portalWelcome',
+  'portalShowTime',
+  'portalShowDevices',
+  'portalShowContracts',
+  'portalAllowDocs',
+  'portalAllowPriority',
+  'portalAllowAttachments',
+  'portalShowReports',
+  'portalShowBilling',
+  'staffAlertEmails',
+  'staffAlertOnNewTicket',
+  'staffAlertOnClientReply',
+  'clientEmailsEnabled',
+  'reportsAutoMode',
+  'reportsAutoDay',
+];
 
 interface PortalUser {
   id: number;
@@ -44,6 +71,8 @@ interface PortalUser {
 const TOGGLES: { key: keyof PortalSettings; label: string; hint: string }[] = [
   { key: 'portalShowTime', label: 'Show the work done', hint: 'Time entries on tickets (date, technician, duration, description) and the Work & hours page. Internal notes and rates are never shown.' },
   { key: 'portalShowContracts', label: 'Show contracts and remaining hours', hint: 'Company managers see their active contracts and hour-block balances.' },
+  { key: 'portalShowBilling', label: 'Show the agreement, prices and invoices', hint: 'Company managers see “Contract & billing”: services, price per unit, totals per month, billing period and year, and their invoices. Hide a contract with “Show in the client portal” on the contract.' },
+  { key: 'portalShowReports', label: 'Show monthly reports', hint: 'Company managers see the reports you publish (Reports → Client reports).' },
   { key: 'portalShowDevices', label: 'Show devices', hint: 'Managers see the company devices, users see the devices assigned to them. Also lets them pick a device on a new request.' },
   { key: 'portalAllowDocs', label: 'Company documentation', hint: 'Clients read the documentation you share (public pages of their company) and can write their own pages.' },
   { key: 'portalAllowPriority', label: 'Clients choose the priority', hint: 'Otherwise new requests get the default priority.' },
@@ -58,17 +87,7 @@ export default function ClientPortalPage() {
   const [f, setF] = useState<PortalSettings | null>(null);
   const [adding, setAdding] = useState(false);
   useEffect(() => {
-    if (settings.data && !f)
-      setF({
-        portalEnabled: settings.data.portalEnabled,
-        portalWelcome: settings.data.portalWelcome,
-        portalShowTime: settings.data.portalShowTime,
-        portalShowDevices: settings.data.portalShowDevices,
-        portalShowContracts: settings.data.portalShowContracts,
-        portalAllowDocs: settings.data.portalAllowDocs,
-        portalAllowPriority: settings.data.portalAllowPriority,
-        portalAllowAttachments: settings.data.portalAllowAttachments,
-      });
+    if (settings.data && !f) setF(Object.fromEntries(SETTING_KEYS.map((k) => [k, settings.data[k]])) as unknown as PortalSettings);
   }, [settings.data, f]);
   const save = useMutation({
     mutationFn: () => api.put('/settings/system', f),
@@ -133,6 +152,56 @@ export default function ClientPortalPage() {
               <FormField label="Welcome message" hint="Shown on the portal home page. Markdown: **bold**, - lists, [links](https://…). E.g. opening hours or an emergency phone number.">
                 <Textarea rows={4} value={f.portalWelcome} disabled={!canManage} onChange={(e) => setF({ ...f, portalWelcome: e.target.value })} />
               </FormField>
+              <div className="space-y-3 border-t border-border pt-4">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <Mail className="size-4 text-primary" /> {t('E-mail notifications')}
+                </div>
+                <FormField label="IT team addresses" hint="Alerted about every new ticket (opened by a client or by the IT team). Separate addresses with commas.">
+                  <Input value={f.staffAlertEmails} disabled={!canManage} placeholder="support@example.com, it@example.com" onChange={(e) => setF({ ...f, staffAlertEmails: e.target.value })} />
+                </FormField>
+                <div>
+                  <Checkbox label={t('Alert the IT team about every new ticket')} checked={f.staffAlertOnNewTicket} disabled={!canManage} onChange={(e) => setF({ ...f, staffAlertOnNewTicket: e.target.checked })} />
+                </div>
+                <div>
+                  <Checkbox label={t('Alert the IT team when a client replies in the portal')} checked={f.staffAlertOnClientReply} disabled={!canManage} onChange={(e) => setF({ ...f, staffAlertOnClientReply: e.target.checked })} />
+                </div>
+                <div>
+                  <Checkbox label={t('E-mail clients')} checked={f.clientEmailsEnabled} disabled={!canManage} onChange={(e) => setF({ ...f, clientEmailsEnabled: e.target.checked })} />
+                  <p className="ml-6 mt-0.5 text-xs text-muted">
+                    {t('Confirmation when a request is opened, notice when it is resolved, and the monthly report. Each client chooses what they receive under My account.')}
+                  </p>
+                </div>
+                <p className="text-xs text-muted">
+                  {t('E-mails are sent with the account set in')}{' '}
+                  <Link to="/admin/email" className="text-primary hover:underline">
+                    {t('Administration → E-mail')}
+                  </Link>
+                  .
+                </p>
+              </div>
+              <div className="space-y-3 border-t border-border pt-4">
+                <div className="flex items-center gap-1.5 font-medium">
+                  <BarChart3 className="size-4 text-primary" /> {t('Monthly reports')}
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <FormField label="Automatic reports">
+                    <Select value={f.reportsAutoMode} disabled={!canManage} onChange={(e) => setF({ ...f, reportsAutoMode: e.target.value as PortalSettings['reportsAutoMode'] })}>
+                      <option value="draft">{t('Prepare drafts for review')}</option>
+                      <option value="publish">{t('Publish and e-mail automatically')}</option>
+                      <option value="off">{t('Off (manual only)')}</option>
+                    </Select>
+                  </FormField>
+                  <FormField label="Day of the month">
+                    <Input type="number" min={1} max={28} value={f.reportsAutoDay} disabled={!canManage || f.reportsAutoMode === 'off'} onChange={(e) => setF({ ...f, reportsAutoDay: Number(e.target.value) || 1 })} />
+                  </FormField>
+                </div>
+                <p className="text-xs text-muted">
+                  {t('On that day, last month’s report is prepared for every company with an active contract or portal users.')}{' '}
+                  <Link to="/client-reports" className="text-primary hover:underline">
+                    {t('Open client reports')}
+                  </Link>
+                </p>
+              </div>
               {canManage && (
                 <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
                   <Save /> Save settings

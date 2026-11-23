@@ -7,6 +7,7 @@ import { getSystemSettings } from '../lib/settings.js';
 import { resolveSmtp, transportFor } from '../lib/mail.js';
 import { emailTextWithImages } from '../lib/note-images.js';
 import { noteImagesToText } from '@taskora/shared';
+import { sendReplyEmail } from './client-email.js';
 
 export function withSignature(body: string, signature: string) {
   return signature.trim() ? `${body.replace(/\s+$/, '')}\n\n-- \n${signature.trim()}` : body;
@@ -103,18 +104,13 @@ export async function sendCustomerNote(db: Db, config: Config, noteId: number, t
     .leftJoin(users, eq(users.id, ticketNotes.userId))
     .where(eq(ticketNotes.id, noteId));
   if (!row || row.visibility !== 'public' || !row.email) return { sent: false };
-  const settings = await getSystemSettings(db);
-  const t = transport ?? transportFor(smtp);
   // Pasted images go out as attachments; the text names them instead of showing raw markdown.
   const mail = await emailTextWithImages(db, config.UPLOAD_DIR, row.ticketId, row.body);
-  await t.sendMail({
-    from: smtp.from,
-    ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
-    to: row.email,
-    subject: `[${row.ticketNumber}] ${row.title}`,
-    ...(mail.attachments.length ? { attachments: mail.attachments } : {}),
-    text: `Hello ${row.firstName ?? ''},\n\n${mail.text}\n\n${row.author ?? settings.organizationName}\n${settings.organizationName}\n\nPlease keep [${row.ticketNumber}] in the subject when replying.`,
-  });
+  const res = await sendReplyEmail(db, config, noteId, mail.attachments, mail.text, transport);
+  if (!res.sent) {
+    if (res.reason === 'opted_out') await db.insert(ticketEvents).values({ ticketId: row.ticketId, userId: null, type: 'email_skipped', data: { to: row.email, noteId, reason: 'The contact turned off reply e-mails' } });
+    return { sent: false };
+  }
   await db.insert(ticketEvents).values({ ticketId: row.ticketId, userId: null, type: 'email_sent', data: { to: row.email, noteId } });
   return { sent: true };
 }

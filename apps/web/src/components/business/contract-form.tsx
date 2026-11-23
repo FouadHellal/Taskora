@@ -29,6 +29,8 @@ export interface ContractRecord {
   contactId: number | null;
   contactName?: string | null;
   isDefault: boolean;
+  autoRenew?: boolean;
+  portalVisible?: boolean;
   hourlyRate: number | null;
   fixedAmount: number | null;
   recurringAmount: number | null;
@@ -49,6 +51,8 @@ interface FormValues {
   slaId: string;
   contactId: number | null;
   isDefault: boolean;
+  autoRenew: boolean;
+  portalVisible: boolean;
   hourlyRate: string;
   fixedAmount: string;
   recurringAmount: string;
@@ -72,6 +76,8 @@ function toForm(c?: ContractRecord | null, companyId?: number | null): FormValue
     slaId: s(c?.slaId),
     contactId: c?.contactId ?? null,
     isDefault: c?.isDefault ?? false,
+    autoRenew: c?.autoRenew ?? false,
+    portalVisible: c?.portalVisible ?? true,
     hourlyRate: s(c?.hourlyRate),
     fixedAmount: s(c?.fixedAmount),
     recurringAmount: s(c?.recurringAmount),
@@ -139,6 +145,8 @@ export function ContractFormDialog({
         slaId: v.slaId ? Number(v.slaId) : null,
         contactId: v.contactId,
         isDefault: v.isDefault,
+        autoRenew: v.autoRenew,
+        portalVisible: v.portalVisible,
         hourlyRate: f.hourly ? v.hourlyRate || null : null,
         fixedAmount: f.fixed ? v.fixedAmount || null : null,
         recurringAmount: f.recurring ? v.recurringAmount || null : null,
@@ -238,6 +246,8 @@ export function ContractFormDialog({
             </FormField>
           </FormGrid>
           <Checkbox label="Default contract for this company (applied to new tickets)" {...register('isDefault')} />
+          <Checkbox label="Renews automatically at the end date" {...register('autoRenew')} />
+          <Checkbox label="Show in the client portal (Contract & billing)" {...register('portalVisible')} />
         </FormSection>
 
         <FormSection title="Commercial terms">
