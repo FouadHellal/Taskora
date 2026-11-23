@@ -70,6 +70,10 @@ export const systemSettingsSchema = z.object({
   staffAlertOnClientReply: z.boolean().default(true),
   /** Master switch for e-mails to clients (confirmation, resolved, monthly report). Each contact can still opt out. */
   clientEmailsEnabled: z.boolean().default(true),
+  /** A sender from a company's e-mail domain who is not a contact yet becomes one. */
+  inboundCreateContacts: z.boolean().default(true),
+  /** Add an internal "what is this about" note to every new ticket. */
+  ticketInsightsEnabled: z.boolean().default(true),
   /* E-mail look (Administration → E-mail). */
   /** Background of the e-mail header (behind the logo). */
   emailHeaderColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).catch('#ffffff').default('#ffffff'),

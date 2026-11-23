@@ -27,6 +27,7 @@ import { deliverWebhook } from './lib/webhooks.js';
 import { sendClientReplyAlert, sendReportPublishedEmails, sendTicketCreatedEmails, sendTicketResolvedEmail } from './jobs/client-email.js';
 import { monthlyReportsDue, runMonthlyReports } from './modules/client-reports/service.js';
 import { refreshAutoQuantities } from './modules/contracts/quantities.js';
+import { analyzeTicket } from './modules/tickets/insights.js';
 
 const config = loadConfig();
 const log = pino({ level: config.LOG_LEVEL, base: { svc: 'worker' } });
@@ -53,6 +54,7 @@ const handlers: Record<string, Handler> = {
   'email.report_published': (db, cfg, job) => sendReportPublishedEmails(db, cfg, Number(job.payload.reportId)),
   'reports.monthly': (db, cfg, job) => runMonthlyReports(db, cfg, String(job.payload.period)),
   'contracts.refresh_quantities': (db) => refreshAutoQuantities(db),
+  'tickets.analyze': (db, _cfg, job) => analyzeTicket(db, Number(job.payload.ticketId)),
   'email.inbound': (db, cfg) => pollInbox(db, cfg, (m) => log.info({ job: 'email.inbound' }, m)),
   'webhook.deliver': (db, cfg, job) => deliverWebhook(db, cfg, job.payload),
   'backup.auto': async (db, cfg) => {

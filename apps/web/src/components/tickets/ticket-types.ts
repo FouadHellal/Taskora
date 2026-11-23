@@ -86,7 +86,15 @@ export interface TicketTimeEntry {
 }
 
 export type TimelineItem =
-  | { kind: 'note'; id: string; at: string; userName: string | null; note: { id: number; body: string; visibility: 'internal' | 'public'; kind: string; userId: number | null; createdAt: string } }
+  | {
+      kind: 'note';
+      id: string;
+      at: string;
+      userName: string | null;
+      /** The client contact who wrote it (portal or e-mail reply). */
+      contactName?: string | null;
+      note: { id: number; body: string; visibility: 'internal' | 'public'; kind: string; userId: number | null; contactId?: number | null; createdAt: string };
+    }
   | { kind: 'event'; id: string; at: string; userName: string | null; event: { id: number; type: string; data: Record<string, unknown>; createdAt: string } }
   | {
       kind: 'time';

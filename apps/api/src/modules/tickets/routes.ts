@@ -416,7 +416,11 @@ export async function ticketRoutes(app: FastifyInstance) {
     await getTicketRow(app.db, id);
     const [notes, events, time, files] = await Promise.all([
       app.db
-        .select({ note: s.ticketNotes, userName: fullName(s.users) })
+        .select({
+          note: s.ticketNotes,
+          userName: fullName(s.users),
+          contactName: sql<string | null>`(select c.first_name || ' ' || c.last_name from contacts c where c.id = ${s.ticketNotes.contactId})`,
+        })
         .from(s.ticketNotes)
         .leftJoin(s.users, eq(s.users.id, s.ticketNotes.userId))
         .where(eq(s.ticketNotes.ticketId, id)),
@@ -457,7 +461,7 @@ export async function ticketRoutes(app: FastifyInstance) {
     } as Record<string, Map<number, string | null>>;
 
     const items = [
-      ...notes.map(({ note, userName }) => ({ kind: 'note' as const, id: `n${note.id}`, at: note.createdAt, userName, note })),
+      ...notes.map(({ note, userName, contactName }) => ({ kind: 'note' as const, id: `n${note.id}`, at: note.createdAt, userName, contactName, note })),
       ...events.map(({ event, userName }) => {
         const d = { ...(event.data as Record<string, unknown>) };
         const field = event.type === 'assigned' ? 'assignedUserId' : (d.field as string);

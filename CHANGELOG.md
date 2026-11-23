@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.9.0] — 2026-11-23
+
+### Added
+- **Company e-mail domains** (company form, *E-mail domains*, e.g. `lesaures.com`): incoming e-mail is matched to a company by the sender — an existing contact first (also personal addresses such as gmail.com), then the company owning the sender's domain. A domain belongs to one company only; public mail domains (gmail.com, outlook.com…) cannot be used.
+- **New contacts from known domains**: a sender from a company's domain who is not a contact yet becomes one (name taken from the e-mail), so the ticket has a requester. Can be turned off in *Settings → E-mail to ticket*.
+- Only clients open tickets: with no *Company for unknown senders*, e-mail from anybody else is refused and listed in the inbound log with the reason.
+- **Replies attributed to their author**: an e-mail reply (`[TKA-…]` in the subject) is recorded under the contact who wrote it — a colleague from the same company becomes a contact — or under the technician when it comes from a staff mailbox (technician replies do not reopen the ticket). Portal replies are recorded under the contact too. The ticket timeline shows the client's name with a *Client · e-mail / portal* badge.
+- **Automatic ticket analysis**: every new ticket (e-mail, portal or IT team) gets an internal note from *Taskora assistant* in the organization language: what it is about (computer, printer, account / Active Directory, e-mail, Microsoft 365, network, server, backup, security, software, access rights, phone, cameras, new employee, purchase) with the words found, the requester and their other open requests, repeat requests on the same topic, the device named in the message (linked to the ticket) or the requester's own device of that kind with its Action1 status, signs of urgency or wide impact, similar resolved tickets of the company with their solution, and first checks. Runs on the server; no text leaves it. Can be turned off in *Settings → E-mail to ticket*.
+
+### Upgrade notes
+- `bash scripts/update.sh`. Migration `0014_inbound_matching` only adds `companies.email_domains` and `ticket_notes.contact_id`; no existing data is changed.
+- Add the e-mail domain of each client company (Companies → edit → *E-mail domains*), and empty *Company for unknown senders* if only clients should open tickets.
+
 ## [0.8.0] — 2026-11-23
 
 ### Added

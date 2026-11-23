@@ -22,6 +22,7 @@ export interface CompanyRecord {
   website: string | null;
   phone: string | null;
   email: string | null;
+  emailDomains?: string[];
   address1: string | null;
   address2: string | null;
   city: string | null;
@@ -38,7 +39,7 @@ export interface CompanyRecord {
   customFields: Record<string, unknown>;
 }
 
-type FormValues = Omit<CompanyRecord, 'id'>;
+type FormValues = Omit<CompanyRecord, 'id' | 'emailDomains'> & { emailDomainsText: string };
 
 const empty: FormValues = {
   name: '',
@@ -49,6 +50,7 @@ const empty: FormValues = {
   website: '',
   phone: '',
   email: '',
+  emailDomainsText: '',
   address1: '',
   address2: '',
   city: '',
@@ -80,12 +82,23 @@ export function CompanyFormDialog({
   const { register, handleSubmit, reset, setError, control, formState } = form;
 
   useEffect(() => {
-    if (open) reset(company ? { ...empty, ...Object.fromEntries(Object.entries(company).map(([k, v]) => [k, v ?? (k in empty && typeof (empty as never)[k] === 'string' ? '' : v)])) } : empty);
+    if (open)
+      reset(
+        company
+          ? {
+              ...empty,
+              ...Object.fromEntries(Object.entries(company).map(([k, v]) => [k, v ?? (k in empty && typeof (empty as never)[k] === 'string' ? '' : v)])),
+              emailDomainsText: (company.emailDomains ?? []).join(', '),
+            }
+          : empty,
+      );
   }, [open, company, reset]);
 
   const save = useMutation({
-    mutationFn: (values: FormValues) =>
-      company ? api.patch<CompanyRecord>(`/companies/${company.id}`, values) : api.post<CompanyRecord>('/companies', values),
+    mutationFn: ({ emailDomainsText, ...rest }: FormValues) => {
+      const values = { ...rest, emailDomains: emailDomainsText.split(/[,;\s]+/).map((d) => d.trim()).filter(Boolean) };
+      return company ? api.patch<CompanyRecord>(`/companies/${company.id}`, values) : api.post<CompanyRecord>('/companies', values);
+    },
     onSuccess: (row) => {
       toast.success(company ? 'Company updated' : 'Company created');
       qc.invalidateQueries({ queryKey: ['companies'] });
@@ -93,7 +106,7 @@ export function CompanyFormDialog({
       onOpenChange(false);
       onSaved?.(row);
     },
-    onError: (e) => handleFormError(e, setError),
+    onError: (e) => handleFormError(e, ((name: string, error: { message: string }) => setError((name === 'emailDomains' ? 'emailDomainsText' : name) as keyof FormValues, error)) as never),
   });
 
   const err = (k: keyof FormValues) => formState.errors[k]?.message as string | undefined;
@@ -167,6 +180,13 @@ export function CompanyFormDialog({
               <Input {...register('website')} placeholder="https://" />
             </FormField>
           </FormGrid>
+          <FormField
+            label="E-mail domains"
+            error={err('emailDomainsText')}
+            hint="E-mails from these domains open tickets for this company, and unknown senders become contacts (e.g. lesaures.com). Separate several with commas. People with a personal address (gmail.com…) are matched when they are contacts."
+          >
+            <Input {...register('emailDomainsText')} placeholder="example.com" />
+          </FormField>
         </FormSection>
         <FormSection title="Billing address">
           <FormGrid cols={2}>

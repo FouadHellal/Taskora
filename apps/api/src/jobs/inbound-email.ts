@@ -13,6 +13,7 @@ import { simpleParser } from 'mailparser';
 import type { Config } from '../config.js';
 import type { Db, Tx } from '../db/client.js';
 import * as s from '../db/schema/index.js';
+import { PUBLIC_MAIL_DOMAINS } from '@taskora/shared';
 import { getSystemSettings } from '../lib/settings.js';
 import { resolveImap } from '../lib/imap-settings.js';
 import { addTicketNote, createTicket, getTicketRow, updateTicket } from '../modules/tickets/service.js';
@@ -67,22 +68,74 @@ async function storeAttachments(db: Tx, config: Config, ticketId: number, files:
   return stored;
 }
 
-/** Finds the sender's contact (unique active match) or a company owning the domain. */
-async function resolveSender(db: Tx, address: string) {
+export interface SenderMatch {
+  companyId: number;
+  contactId: number | null;
+  /** How the company was found. */
+  via: 'contact' | 'domain' | 'company_address';
+  /** A contact was created for this sender. */
+  createdContact?: string;
+}
+
+/** "Jean Dupont" / "jean.dupont@x.com" → first and last name for a new contact. */
+export function nameFromSender(address: string, fromName?: string | null) {
+  const clean = (fromName ?? '').replace(/["<>]/g, '').replace(/\s+/g, ' ').trim();
+  if (clean && !clean.includes('@')) {
+    const parts = clean.split(' ');
+    return parts.length > 1 ? { firstName: parts.slice(0, -1).join(' '), lastName: parts.at(-1)! } : { firstName: parts[0]!, lastName: '-' };
+  }
+  const local = address.split('@')[0] ?? address;
+  const words = local.split(/[._-]+/).filter(Boolean).map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  return words.length > 1 ? { firstName: words.slice(0, -1).join(' '), lastName: words.at(-1)! } : { firstName: words[0] ?? local, lastName: '-' };
+}
+
+/** Companies that own a domain: listed in their e-mail domains, else (only for non-public domains) their e-mail address or website. */
+async function companiesForDomain(db: Tx, domain: string) {
+  const listed = await db
+    .select({ id: s.companies.id })
+    .from(s.companies)
+    .where(and(eq(s.companies.isActive, true), sql`${domain} = any(${s.companies.emailDomains})`));
+  if (listed.length || PUBLIC_MAIL_DOMAINS.has(domain)) return { ids: listed.map((c) => c.id), via: 'domain' as const };
+  const guessed = await db
+    .select({ id: s.companies.id })
+    .from(s.companies)
+    .where(and(eq(s.companies.isActive, true), or(ilike(s.companies.email, `%@${domain}`), sql`lower(${s.companies.website}) ~ ${`(^|[/.@])${domain.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(/|$)`}`)));
+  return { ids: guessed.map((c) => c.id), via: 'company_address' as const };
+}
+
+/**
+ * Identifies the sender: an active contact with that address (its company), otherwise the
+ * one company that owns the address's domain. With `createContact`, a sender from a known
+ * domain who is not a contact yet becomes one.
+ */
+export async function resolveSender(db: Tx, address: string, opts: { fromName?: string | null; createContact?: boolean; companyId?: number } = {}): Promise<SenderMatch | null> {
   const email = address.trim().toLowerCase();
+  const domain = email.split('@')[1] ?? '';
   const contacts = await db
     .select({ id: s.contacts.id, companyId: s.contacts.companyId })
     .from(s.contacts)
-    .where(and(sql`lower(${s.contacts.email}) = ${email}`, eq(s.contacts.isActive, true)));
-  if (contacts.length === 1) return { companyId: contacts[0]!.companyId, contactId: contacts[0]!.id };
-  const domain = email.split('@')[1];
+    .innerJoin(s.companies, eq(s.companies.id, s.contacts.companyId))
+    .where(and(or(sql`lower(${s.contacts.email}) = ${email}`, sql`lower(${s.contacts.notifyEmail}) = ${email}`), eq(s.contacts.isActive, true), eq(s.companies.isActive, true)));
+  const inCompany = opts.companyId ? contacts.filter((c) => c.companyId === opts.companyId) : contacts;
+  if (inCompany.length === 1) return { companyId: inCompany[0]!.companyId, contactId: inCompany[0]!.id, via: 'contact' };
   if (!domain) return null;
-  const companies = await db
-    .select({ id: s.companies.id })
-    .from(s.companies)
-    .where(and(eq(s.companies.isActive, true), or(ilike(s.companies.email, `%@${domain}`), ilike(s.companies.website, `%${domain}%`))));
+  const owners = await companiesForDomain(db, domain);
+  // Several contacts share the address: keep the one in the company owning the domain.
+  if (contacts.length > 1) {
+    const match = contacts.filter((c) => owners.ids.includes(c.companyId));
+    if (match.length === 1) return { companyId: match[0]!.companyId, contactId: match[0]!.id, via: 'contact' };
+  }
+  const ids = opts.companyId ? owners.ids.filter((id) => id === opts.companyId) : owners.ids;
   // Only an unambiguous domain match is trusted.
-  return companies.length === 1 ? { companyId: companies[0]!.id, contactId: null } : null;
+  if (ids.length !== 1) return null;
+  const companyId = ids[0]!;
+  if (!opts.createContact) return { companyId, contactId: null, via: owners.via };
+  const name = nameFromSender(email, opts.fromName);
+  const [created] = await db
+    .insert(s.contacts)
+    .values({ companyId, firstName: name.firstName.slice(0, 100), lastName: name.lastName.slice(0, 100), email, notes: 'Created automatically from an incoming e-mail.' })
+    .returning({ id: s.contacts.id });
+  return { companyId, contactId: created!.id, via: owners.via, createdContact: `${name.firstName} ${name.lastName}`.replace(/ -$/, '') };
 }
 
 export async function processInboundEmail(db: Db, config: Config, msg: InboundMessage): Promise<{ status: string; ticketId: number | null; detail?: string }> {
@@ -100,14 +153,26 @@ export async function processInboundEmail(db: Db, config: Config, msg: InboundMe
   if (ref) {
     const [ticket] = await db.select().from(s.tickets).where(sql`upper(${s.tickets.ticketNumber}) = ${ref[1]!.toUpperCase()}`);
     if (ticket) {
+      // Who answered: a technician (by their user e-mail), a contact of the ticket's company
+      // (created from the company's domain when needed) or someone else.
+      const email = msg.fromAddress.trim().toLowerCase();
+      const [staff] = await db.select({ id: s.users.id }).from(s.users).where(and(sql`lower(${s.users.email}) = ${email}`, eq(s.users.isActive, true)));
+      let detail: string | undefined;
+      const sender = staff
+        ? null
+        : ((await resolveSender(db, email, { fromName: msg.fromName, companyId: ticket.companyId, createContact: settings.inboundCreateContacts })) ??
+          (await resolveSender(db, email, { fromName: msg.fromName })));
+      if (sender?.createdContact) detail = `New contact created: ${sender.createdContact}`;
+      const known = !!staff || !!sender?.contactId;
       await db.transaction(async (tx) => {
-        await addTicketNote({ db: tx, userId: null }, ticket.id, {
-          body: `E-mail from ${msg.fromName ? `${msg.fromName} <${msg.fromAddress}>` : msg.fromAddress}:\n\n${body || '(empty message)'}`,
+        await addTicketNote({ db: tx, userId: staff?.id ?? null }, ticket.id, {
+          body: known ? body || '(empty message)' : `E-mail from ${msg.fromName ? `${msg.fromName} <${msg.fromAddress}>` : msg.fromAddress}:\n\n${body || '(empty message)'}`,
           visibility: 'public',
           kind: 'email',
+          contactId: staff ? null : (sender?.contactId ?? null),
         });
         const [status] = await tx.select().from(s.ticketStatuses).where(eq(s.ticketStatuses.id, ticket.statusId));
-        if (status && ['waiting', 'resolved', 'closed'].includes(status.category)) {
+        if (!staff && status && ['waiting', 'resolved', 'closed'].includes(status.category)) {
           const [open] = await tx
             .select({ id: s.ticketStatuses.id })
             .from(s.ticketStatuses)
@@ -117,18 +182,18 @@ export async function processInboundEmail(db: Db, config: Config, msg: InboundMe
           if (open) await updateTicket({ db: tx, userId: null }, ticket.id, { statusId: open.id });
         }
         await storeAttachments(tx, config, ticket.id, msg.attachments);
-        await log('appended', ticket.id, undefined, tx);
+        await log('appended', ticket.id, detail, tx);
       });
       await runTicketRules(db, 'ticket.updated', ticket.id);
       return { status: 'appended', ticketId: ticket.id };
     }
   }
 
-  // New ticket.
-  const sender = await resolveSender(db, msg.fromAddress);
+  // New ticket: only from a known contact or a company's domain (or the fallback company).
+  const sender = await resolveSender(db, msg.fromAddress, { fromName: msg.fromName, createContact: settings.inboundCreateContacts });
   const companyId = sender?.companyId ?? settings.inboundEmailCompanyId;
   if (!companyId) {
-    const detail = 'Unknown sender and no fallback company configured (System Settings → Inbound e-mail)';
+    const detail = 'Unknown sender: the address is not a contact and its domain belongs to no company (add the domain on the company, or the person as a contact)';
     await log('rejected', null, detail);
     return { status: 'rejected', ticketId: null, detail };
   }
@@ -149,7 +214,7 @@ export async function processInboundEmail(db: Db, config: Config, msg: InboundMe
       },
     );
     await storeAttachments(tx, config, t.id, msg.attachments);
-    await log('created', t.id, sender ? undefined : 'Unknown sender — placed in the fallback company', tx);
+    await log('created', t.id, sender ? (sender.createdContact ? `New contact created: ${sender.createdContact}` : undefined) : 'Unknown sender — placed in the fallback company', tx);
     return t;
   });
   await runTicketRules(db, 'ticket.created', ticket.id);

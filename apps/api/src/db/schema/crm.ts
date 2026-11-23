@@ -15,6 +15,8 @@ export const companies = pgTable(
     website: text('website'),
     phone: text('phone'),
     email: text('email'),
+    /** E-mail domains of the company (lesaures.com): incoming e-mail from them is matched to it. */
+    emailDomains: text('email_domains').array().notNull().default(sql`'{}'::text[]`),
     address1: text('address1'),
     address2: text('address2'),
     city: text('city'),

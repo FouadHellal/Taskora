@@ -1907,6 +1907,13 @@ const fr: Dict = {
   "Buttons, links and highlights": "Boutons, liens et éléments mis en avant",
   "Preview — confirmation e-mail to a client": "Aperçu — e-mail de confirmation à un client",
   "E-mail look and signature saved": "Apparence et signature des e-mails enregistrées",
+  "E-mail domains": "Domaines e-mail",
+  "E-mails from these domains open tickets for this company, and unknown senders become contacts (e.g. lesaures.com). Separate several with commas. People with a personal address (gmail.com…) are matched when they are contacts.": "Les e-mails de ces domaines ouvrent des tickets pour cette société, et les expéditeurs inconnus deviennent des contacts (ex. lesaures.com). Séparez-en plusieurs par des virgules. Les personnes avec une adresse personnelle (gmail.com…) sont reconnues si elles sont des contacts.",
+  "Automatic analysis": "Analyse automatique",
+  "Leave empty (recommended) so only your clients open tickets: e-mail from an address that is no contact and whose domain is in no company's “E-mail domains” is refused and listed below.": "Laisser vide (recommandé) pour que seuls vos clients ouvrent des tickets : un e-mail d'une adresse qui n'est pas un contact et dont le domaine n'est dans les « Domaines e-mail » d'aucune société est refusé et listé ci-dessous.",
+  "Matching": "Reconnaissance",
+  "Create a contact for a new sender from a company's domain": "Créer un contact pour un nouvel expéditeur du domaine d'une société",
+  "Analyse new tickets automatically (internal note: topic, device, urgency, similar tickets, first checks)": "Analyser automatiquement les nouveaux tickets (note interne : sujet, appareil, urgence, tickets similaires, premières vérifications)",
 };
 
 export default fr;

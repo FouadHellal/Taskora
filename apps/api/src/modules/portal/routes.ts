@@ -421,7 +421,8 @@ export async function portalRoutes(app: FastifyInstance) {
             body: s.ticketNotes.body,
             kind: s.ticketNotes.kind,
             createdAt: s.ticketNotes.createdAt,
-            author: staffName,
+            author: sql<string | null>`coalesce(${staffName}, (select c.first_name || ' ' || c.last_name from contacts c where c.id = ${s.ticketNotes.contactId}))`,
+            contactId: s.ticketNotes.contactId,
           })
           .from(s.ticketNotes)
           .leftJoin(s.users, eq(s.users.id, s.ticketNotes.userId))
@@ -448,7 +449,7 @@ export async function portalRoutes(app: FastifyInstance) {
           deviceName: device?.name ?? null,
           description: portalImageUrls(t.description, t.id),
           resolution: portalImageUrls(t.resolution, t.id),
-          notes: notes.map((n) => ({ ...n, kind: undefined, body: portalImageUrls(n.body, t.id)!, fromCustomer: n.kind === 'portal' || n.kind === 'email', author: n.author ?? null })),
+          notes: notes.map((n) => ({ ...n, kind: undefined, body: portalImageUrls(n.body, t.id)!, fromCustomer: !!n.contactId || n.kind === 'portal' || (n.kind === 'email' && !n.author), contactId: undefined, author: n.author ?? null })),
           workedMinutes: time.reduce((a, e) => a + e.minutes, 0),
           timeEntries: time,
           files: files.map((f) => ({ ...f, uploadedByContactId: undefined, fromClient: f.uploadedByContactId !== null })),
@@ -577,7 +578,7 @@ export async function portalRoutes(app: FastifyInstance) {
         const t = await loadTicket(c, idOf(req));
         const input = replySchema.parse(req.body);
         const note = await app.db.transaction(async (tx) => {
-          const n = await addTicketNote({ db: tx, userId: null }, t.id, { body: `${c.firstName} ${c.lastName} wrote:\n\n${input.body}`, visibility: 'public', kind: 'portal' });
+          const n = await addTicketNote({ db: tx, userId: null }, t.id, { body: input.body, visibility: 'public', kind: 'portal', contactId: c.id });
           if (['waiting', 'resolved'].includes(t.statusCategory)) {
             const [open] = await tx
               .select({ id: s.ticketStatuses.id })

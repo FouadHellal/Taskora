@@ -387,9 +387,11 @@ export const ticketNotes = pgTable(
       .notNull()
       .references(() => tickets.id, { onDelete: 'cascade' }),
     userId: integer('user_id').references(() => users.id, { onDelete: 'set null' }),
+    /** The client contact who wrote the note (portal or e-mail reply). */
+    contactId: integer('contact_id').references(() => contacts.id, { onDelete: 'set null' }),
     body: text('body').notNull(),
     visibility: text('visibility').notNull().default('internal'),
-    /** 'note' | 'resolution' | 'automation' */
+    /** 'note' | 'resolution' | 'automation' | 'portal' | 'email' | 'email_out' | 'insight' */
     kind: text('kind').notNull().default('note'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

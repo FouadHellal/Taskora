@@ -1907,6 +1907,13 @@ const nl: Dict = {
   "Buttons, links and highlights": "Knoppen, links en accenten",
   "Preview — confirmation e-mail to a client": "Voorbeeld — bevestigingsmail aan een klant",
   "E-mail look and signature saved": "Uiterlijk en handtekening van de e-mails opgeslagen",
+  "E-mail domains": "E-maildomeinen",
+  "E-mails from these domains open tickets for this company, and unknown senders become contacts (e.g. lesaures.com). Separate several with commas. People with a personal address (gmail.com…) are matched when they are contacts.": "E-mails van deze domeinen openen tickets voor dit bedrijf en onbekende afzenders worden contactpersonen (bv. lesaures.com). Scheid meerdere met komma's. Mensen met een persoonlijk adres (gmail.com…) worden herkend als ze contactpersoon zijn.",
+  "Automatic analysis": "Automatische analyse",
+  "Leave empty (recommended) so only your clients open tickets: e-mail from an address that is no contact and whose domain is in no company's “E-mail domains” is refused and listed below.": "Leeg laten (aanbevolen) zodat alleen uw klanten tickets openen: e-mail van een adres dat geen contactpersoon is en waarvan het domein bij geen enkel bedrijf in de „E-maildomeinen” staat, wordt geweigerd en hieronder vermeld.",
+  "Matching": "Herkenning",
+  "Create a contact for a new sender from a company's domain": "Een contactpersoon aanmaken voor een nieuwe afzender van het domein van een bedrijf",
+  "Analyse new tickets automatically (internal note: topic, device, urgency, similar tickets, first checks)": "Nieuwe tickets automatisch analyseren (interne notitie: onderwerp, apparaat, urgentie, gelijkaardige tickets, eerste controles)",
 };
 
 export default nl;

@@ -207,14 +207,32 @@ function NoteItem({ ticketId, item }: { ticketId: number; item: Extract<Timeline
     mutationFn: () => api.delete(`/tickets/${ticketId}/notes/${item.note.id}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['timeline', ticketId] }),
   });
+  const insight = item.note.kind === 'insight';
+  const fromClient = !!item.contactName || item.note.kind === 'portal' || (item.note.kind === 'email' && !item.userName);
+  const author = item.userName ?? item.contactName ?? (insight ? 'Taskora assistant' : fromClient ? 'Client' : 'Automation');
   return (
     <div className="group">
       <span className="absolute left-0 top-1">
-        <Avatar name={item.userName ?? 'System'} />
+        {insight ? (
+          <span className="flex size-6 items-center justify-center rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300">
+            <Sparkles className="size-3.5" />
+          </span>
+        ) : (
+          <Avatar name={author} />
+        )}
       </span>
-      <div className={cn('rounded-md border px-3 py-2', isPublic ? 'border-primary/30 bg-primary-soft/30' : 'border-border bg-surface', item.note.kind === 'automation' && 'border-dashed')}>
+      <div
+        className={cn(
+          'rounded-md border px-3 py-2',
+          isPublic ? 'border-primary/30 bg-primary-soft/30' : 'border-border bg-surface',
+          item.note.kind === 'automation' && 'border-dashed',
+          insight && 'border-violet-500/30 bg-violet-500/5',
+        )}
+      >
         <div className="mb-1 flex flex-wrap items-center gap-2 text-[12px]">
-          <span className="font-medium">{item.userName ?? 'Automation'}</span>
+          <span className="font-medium">{author}</span>
+          {fromClient && <Badge tone="warning">{item.note.kind === 'email' ? 'Client · e-mail' : 'Client · portal'}</Badge>}
+          {insight && <Badge color="#7c3aed">Automatic analysis</Badge>}
           {isPublic ? (
             <Badge tone="primary">
               <Eye className="size-3" /> Customer-visible

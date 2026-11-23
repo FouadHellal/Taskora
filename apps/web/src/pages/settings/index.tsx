@@ -436,11 +436,21 @@ function EmailToTicket() {
   const q = useQuery({ queryKey: ['imap-settings'], queryFn: () => api.get<ImapState>('/settings/imap') });
   const sys = useQuery({ queryKey: ['system-settings'], queryFn: () => api.get<SystemSettings>('/settings/system') });
   const [f, setF] = useState<Partial<ImapState> & { password?: string }>({});
-  const [routing, setRouting] = useState<{ inboundEmailCompanyId: number | null; inboundEmailQueueId: number | null }>({ inboundEmailCompanyId: null, inboundEmailQueueId: null });
+  const [routing, setRouting] = useState<{ inboundEmailCompanyId: number | null; inboundEmailQueueId: number | null; inboundCreateContacts: boolean; ticketInsightsEnabled: boolean }>({
+    inboundEmailCompanyId: null,
+    inboundEmailQueueId: null,
+    inboundCreateContacts: true,
+    ticketInsightsEnabled: true,
+  });
   useEffect(() => q.data && setF({ ...q.data, password: undefined }), [q.data]);
   useEffect(() => {
     if (sys.data)
-      setRouting({ inboundEmailCompanyId: (sys.data.inboundEmailCompanyId as number | null) ?? null, inboundEmailQueueId: (sys.data.inboundEmailQueueId as number | null) ?? null });
+      setRouting({
+        inboundEmailCompanyId: (sys.data.inboundEmailCompanyId as number | null) ?? null,
+        inboundEmailQueueId: (sys.data.inboundEmailQueueId as number | null) ?? null,
+        inboundCreateContacts: sys.data.inboundCreateContacts !== false,
+        ticketInsightsEnabled: sys.data.ticketInsightsEnabled !== false,
+      });
   }, [sys.data]);
   const save = useMutation({
     mutationFn: async () => {
@@ -535,7 +545,7 @@ function EmailToTicket() {
           )}
           <FormSection title="Routing">
             <FormGrid cols={2}>
-              <FormField label="Company for unknown senders" hint="Leave empty to reject e-mail from addresses that match no contact or company domain">
+              <FormField label="Company for unknown senders" hint="Leave empty (recommended) so only your clients open tickets: e-mail from an address that is no contact and whose domain is in no company's “E-mail domains” is refused and listed below.">
                 <EntityPicker kind="company" value={routing.inboundEmailCompanyId} onChange={(v) => setRouting({ ...routing, inboundEmailCompanyId: v })} />
               </FormField>
               <FormField label="Queue for new e-mail tickets">
@@ -546,6 +556,22 @@ function EmailToTicket() {
                 />
               </FormField>
             </FormGrid>
+          </FormSection>
+          <FormSection title="Matching">
+            <p className="text-xs text-muted">
+              Each e-mail is matched to a company by the sender: an existing contact first (also personal addresses such as gmail.com), then the company whose <b>E-mail domains</b> (on the company) contain the sender’s
+              domain. Replies with the ticket number are added to that ticket under the name of the contact who wrote them.
+            </p>
+            <Checkbox
+              label="Create a contact for a new sender from a company's domain"
+              checked={routing.inboundCreateContacts}
+              onChange={(e) => setRouting({ ...routing, inboundCreateContacts: e.target.checked })}
+            />
+            <Checkbox
+              label="Analyse new tickets automatically (internal note: topic, device, urgency, similar tickets, first checks)"
+              checked={routing.ticketInsightsEnabled}
+              onChange={(e) => setRouting({ ...routing, ticketInsightsEnabled: e.target.checked })}
+            />
           </FormSection>
           <p className="text-xs text-muted">
             Microsoft 365 / Google Workspace: basic IMAP passwords are often disabled. Use an app password, or let n8n read the mailbox (OAuth) and post each message to Taskora —

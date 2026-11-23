@@ -96,6 +96,8 @@ export async function runTicketRules(
   }
   // Proactive e-mails (IT alert + client confirmation, "resolved" notice); the worker checks settings and preferences.
   if (!opts.ruleIds && trigger === 'ticket.created') await enqueue(db, 'email.ticket_created', { ticketId }, { maxAttempts: 3 });
+  // Automatic interpretation of the request (internal note).
+  if (!opts.ruleIds && trigger === 'ticket.created') await enqueue(db, 'tickets.analyze', { ticketId }, { maxAttempts: 2 });
   if (!opts.ruleIds && trigger === 'ticket.updated') {
     await enqueue(db, 'email.ticket_updated', { ticketId }, { dedupeKey: `email.ticket_updated:${ticketId}`, maxAttempts: 3, runAt: new Date(Date.now() + 15_000) });
   }

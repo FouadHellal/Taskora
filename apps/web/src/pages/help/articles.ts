@@ -239,6 +239,8 @@ The **client portal** is a separate, simpler website for the contacts of your cl
 - Each client chooses what they receive in the portal under **My account → E-mails I receive**. Managers can also ask for a copy of every new request of their company.
 - E-mails go out through [Administration → E-mail](/admin/email). For Gmail: host *smtp.gmail.com*, port *587*, TLS unticked, the full address as user and an **app password** (Google account → Security → 2-Step Verification → App passwords).
 - Clients can add a **second mailbox** and choose where ticket e-mails go (their address, the second one, or both).
+- **Which e-mails open tickets**: set the **E-mail domains** of each client company (e.g. lesaures.com). An e-mail from a contact, or from a company's domain, opens a ticket for that company — a new sender from the domain becomes a contact. Leave *Company for unknown senders* empty in [Settings → E-mail to ticket](/settings?tab=email) to refuse everybody else. Replies are recorded under the contact who wrote them.
+- **Automatic analysis**: every new ticket gets an internal note (topic such as printer, laptop or Active Directory, the device concerned, urgency, similar past tickets and first checks); a device named in the message is linked to the ticket.
 - **One mailbox for everything**: in [Settings → E-mail to ticket](/settings?tab=email) tick *Use the same mailbox as outgoing e-mail*; client replies then come back into their tickets.
 - **Look and signature**: in [Administration → E-mail](/admin/email) upload the e-mail logo, choose the colours and write the signature (HTML allowed, with {{sender}}, {{organization}}, {{logo}} and {{portal}}); the preview shows the result.
 

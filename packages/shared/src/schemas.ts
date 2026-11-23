@@ -176,6 +176,24 @@ const address = {
   country: optText(100),
 };
 
+/** Free mail providers: a domain like gmail.com never identifies one company. */
+export const PUBLIC_MAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'outlook.com', 'outlook.fr', 'hotmail.com', 'hotmail.fr', 'live.com', 'live.fr', 'msn.com',
+  'yahoo.com', 'yahoo.fr', 'ymail.com', 'icloud.com', 'me.com', 'mac.com', 'aol.com', 'gmx.com', 'gmx.fr', 'gmx.de', 'mail.com',
+  'proton.me', 'protonmail.com', 'zoho.com', 'yandex.com', 'yandex.ru', 'laposte.net', 'orange.fr', 'free.fr', 'sfr.fr', 'wanadoo.fr', 'web.de', 't-online.de',
+]);
+const DOMAIN_RE = /^(?=.{3,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/;
+/** "@LesAures.com", "https://www.lesaures.com/" → "lesaures.com". */
+export function normalizeDomain(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/^.*@/, '')
+    .replace(/^[a-z]+:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/[/?#].*$/, '');
+}
+
 export const companySchema = z.object({
   name: reqText(200),
   accountNumber: optText(40),
@@ -185,6 +203,14 @@ export const companySchema = z.object({
   website: optText(255),
   phone: optText(60),
   email: z.string().trim().email().nullish().or(z.literal('')).transform((v) => v || null),
+  /** E-mail domains of the company ("lesaures.com"): incoming e-mail from them opens tickets for it. */
+  emailDomains: z
+    .array(z.string())
+    .max(20)
+    .default([])
+    .transform((list) => [...new Set(list.map(normalizeDomain).filter(Boolean))])
+    .refine((list) => list.every((d) => DOMAIN_RE.test(d)), 'Use domains such as example.com')
+    .refine((list) => !list.some((d) => PUBLIC_MAIL_DOMAINS.has(d)), 'Public mail domains (gmail.com, outlook.com…) cannot belong to a company; add the people as contacts instead'),
   ...address,
   parentCompanyId: optId,
   primaryContactId: optId,

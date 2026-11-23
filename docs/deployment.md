@@ -174,6 +174,12 @@ Use the same Gmail account for everything so the whole conversation stays on the
 1. **Administration → E-mail**: the Gmail account and app password (above). Leave *Reply-To* empty so clients answer the same address.
 2. **Settings → E-mail to ticket**: tick *Turn incoming e-mail into tickets* and *Use the same mailbox as outgoing e-mail*, save, then *Test connection*. Taskora reads `imap.gmail.com` with the same user and app password every minute: a reply with `[TKA-…]` in the subject becomes a note on that ticket, any other e-mail becomes a new ticket.
 
+### Which e-mails open tickets
+
+Taskora matches each incoming e-mail to a client company by its sender: an existing **contact** with that address (personal addresses such as gmail.com work too), otherwise the company whose **E-mail domains** contain the sender's domain (set on the company, e.g. `lesaures.com`). A new sender from a known domain becomes a contact automatically. Leave *Company for unknown senders* empty so that everybody else is refused (they appear in the inbound log with the reason). Replies with `[TKA-…]` in the subject are added to their ticket under the name of the contact — or technician — who wrote them.
+
+Every new ticket also gets an internal *Automatic analysis* note (topic, device, urgency, similar tickets, first checks). Both options are in *Settings → E-mail to ticket → Matching*.
+
 ### Look of the e-mails and signature
 
 **Administration → E-mail → Look of the e-mails and signature**: upload the e-mail logo (a version made for the header colour), pick the header and accent colours, add a footer line and the signature (plain text or HTML with `{{sender}}`, `{{organization}}`, `{{logo}}`, `{{portal}}`). The preview shows a client e-mail as it will be sent. Images in the signature must be reachable from the internet, so `PUBLIC_URL` must be the public HTTPS address.

@@ -1907,6 +1907,13 @@ const es: Dict = {
   "Buttons, links and highlights": "Botones, enlaces y elementos destacados",
   "Preview — confirmation e-mail to a client": "Vista previa — correo de confirmación a un cliente",
   "E-mail look and signature saved": "Aspecto y firma de los correos guardados",
+  "E-mail domains": "Dominios de correo",
+  "E-mails from these domains open tickets for this company, and unknown senders become contacts (e.g. lesaures.com). Separate several with commas. People with a personal address (gmail.com…) are matched when they are contacts.": "Los correos de estos dominios abren tickets para esta empresa y los remitentes desconocidos se convierten en contactos (p. ej. lesaures.com). Separe varios con comas. Las personas con una dirección personal (gmail.com…) se reconocen si son contactos.",
+  "Automatic analysis": "Análisis automático",
+  "Leave empty (recommended) so only your clients open tickets: e-mail from an address that is no contact and whose domain is in no company's “E-mail domains” is refused and listed below.": "Dejar vacío (recomendado) para que solo sus clientes abran tickets: un correo de una dirección que no es un contacto y cuyo dominio no está en los «Dominios de correo» de ninguna empresa se rechaza y aparece abajo.",
+  "Matching": "Reconocimiento",
+  "Create a contact for a new sender from a company's domain": "Crear un contacto para un nuevo remitente del dominio de una empresa",
+  "Analyse new tickets automatically (internal note: topic, device, urgency, similar tickets, first checks)": "Analizar automáticamente los nuevos tickets (nota interna: tema, dispositivo, urgencia, tickets similares, primeras comprobaciones)",
 };
 
 export default es;

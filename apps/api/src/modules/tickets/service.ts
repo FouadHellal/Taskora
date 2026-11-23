@@ -352,14 +352,14 @@ function normalise(v: unknown) {
 export async function addTicketNote(
   ctx: TicketCtx,
   ticketId: number,
-  input: { body: string; visibility: 'internal' | 'public'; statusId?: number | null; kind?: string },
+  input: { body: string; visibility: 'internal' | 'public'; statusId?: number | null; kind?: string; contactId?: number | null },
 ) {
   const db = ctx.db;
   const now = ctx.now ?? new Date();
   const ticket = await getTicketRow(db, ticketId);
   const [note] = await db
     .insert(s.ticketNotes)
-    .values({ ticketId, userId: ctx.userId, body: input.body, visibility: input.visibility, kind: input.kind ?? 'note', createdAt: now })
+    .values({ ticketId, userId: ctx.userId, contactId: input.contactId ?? null, body: input.body, visibility: input.visibility, kind: input.kind ?? 'note', createdAt: now })
     .returning();
   await event(db, ticketId, ctx.userId, 'note_added', { ...origin(ctx), noteId: note!.id, visibility: input.visibility }, now);
 

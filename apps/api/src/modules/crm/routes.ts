@@ -20,6 +20,20 @@ async function assertContactInCompany(db: Tx, contactId: number | null | undefin
   if (!c || c.companyId !== companyId) throw badRequest('The contact does not belong to this company', { fields: { primaryContactId: 'Contact belongs to another company' } });
 }
 
+/** An e-mail domain identifies one company only. */
+async function assertDomainsFree(tx: Tx, domains: string[], companyId: number | null) {
+  if (!domains.length) return;
+  const [taken] = await tx
+    .select({ name: s.companies.name, domains: s.companies.emailDomains })
+    .from(s.companies)
+    .where(and(sql`${s.companies.emailDomains} && ${sql`array[${sql.join(domains.map((d) => sql`${d}`), sql`, `)}]::text[]`}`, companyId ? ne(s.companies.id, companyId) : undefined))
+    .limit(1);
+  if (taken) {
+    const d = domains.find((x) => taken.domains.includes(x));
+    throw badRequest(`${d} already belongs to ${taken.name}`, { fields: { emailDomains: `${d} already belongs to ${taken.name}` } });
+  }
+}
+
 export async function crmRoutes(app: FastifyInstance) {
   /* ============================== companies ============================== */
 
@@ -171,6 +185,7 @@ export async function crmRoutes(app: FastifyInstance) {
     const input = companySchema.parse(req.body);
     const created = await app.db.transaction(async (tx) => {
       const customFields = await validateCustomFields(tx, 'company', input.customFields);
+      await assertDomainsFree(tx, input.emailDomains, null);
       const [row] = await tx
         .insert(s.companies)
         .values({ ...input, primaryContactId: null, customFields, createdById: currentUser(req).id })
@@ -193,6 +208,7 @@ export async function crmRoutes(app: FastifyInstance) {
       if ('customFields' in body) data.customFields = await validateCustomFields(tx, 'company', input.customFields, before.customFields);
       if (data.parentCompanyId === id) throw badRequest('A company cannot be its own parent');
       if ('primaryContactId' in data) await assertContactInCompany(tx, data.primaryContactId, id);
+      if (data.emailDomains) await assertDomainsFree(tx, data.emailDomains, id);
       const [row] = await tx.update(s.companies).set(data).where(eq(s.companies.id, id)).returning();
       await audit(tx, req, { action: 'update', entityType: 'company', entityId: id, summary: row!.name, changes: diff(before, data) });
       return row;
