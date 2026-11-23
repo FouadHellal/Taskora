@@ -8,7 +8,8 @@ import { audit } from '../../lib/audit.js';
 import { can, currentUser } from '../../lib/context.js';
 import { encryptJson, randomToken, sha256 } from '../../lib/crypto.js';
 import { badRequest, forbidden, notFound } from '../../lib/errors.js';
-import { imapSettingsInputSchema, publicImapSettings, resolveImap, saveImapSettings } from '../../lib/imap-settings.js';
+import { resolveSmtp } from '../../lib/mail.js';
+import { imapHostFor, imapSettingsInputSchema, publicImapSettings, resolveImap, saveImapSettings } from '../../lib/imap-settings.js';
 import { idOf } from '../../lib/params.js';
 import { emitEvent, WEBHOOK_EVENTS } from '../../lib/webhooks.js';
 import { processInboundEmail } from '../../jobs/inbound-email.js';
@@ -187,7 +188,12 @@ export async function developerRoutes(app: FastifyInstance) {
 
   app.put('/settings/imap', { config: { perm: 'settings.manage' } }, async (req) => {
     const input = imapSettingsInputSchema.parse(req.body);
-    if (input.enabled && (!input.host || !input.user)) throw badRequest('Host and user name are required to enable the mailbox');
+    if (input.enabled && !input.useSmtpAccount && (!input.host || !input.user)) throw badRequest('Host and user name are required to enable the mailbox');
+    if (input.enabled && input.useSmtpAccount) {
+      const smtp = await resolveSmtp(app.db, app.config);
+      if (!smtp?.user) throw badRequest('Set up the outgoing mailbox (Administration → E-mail) with a user name and password first');
+      if (!input.host) input.host = imapHostFor(smtp.host);
+    }
     await saveImapSettings(app.db, app.config, input);
     await audit(app.db, req, { action: 'update', entityType: 'settings', summary: 'Inbound e-mail (IMAP) settings' });
     const effective = await resolveImap(app.db, app.config);

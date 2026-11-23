@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.8.0] — 2026-11-23
+
+### Added
+- **Redesigned e-mails**: every e-mail (client confirmations, replies, resolved notices, monthly reports, IT alerts, staff notifications, ticket e-mails, portal invitations and password resets, test e-mail) uses one branded layout: header with your **e-mail logo** and **header colour**, accent colour, ticket card with reference and status, quote, button, signature and footer line. Set them in *Administration → E-mail → Look of the e-mails and signature*, with a live preview.
+- **HTML signatures**: the signature accepts HTML (tables, inline styles, images; scripts and event handlers are removed) and the variables `{{sender}}` (the technician, or "the … team" for automatic e-mails), `{{organization}}`, `{{logo}}` (public address of the e-mail logo) and `{{portal}}`. It is added to every client-facing e-mail and shown in the *Send e-mail* dialog. *Start from a template* gives a ready-made layout.
+- **E-mail logo** (separate from the organization logo, e.g. a version for a dark header), served publicly at `/api/v1/logos/email` for signatures.
+- **One mailbox for everything**: *Settings → E-mail to ticket → Use the same mailbox as outgoing e-mail* reads replies from the account that sends (same user and app password; Gmail's IMAP server is filled in automatically), so client answers land in their tickets.
+- **Client mailboxes**: in the portal (*My account → E-mails I receive*) a client can add a **second address** and choose where ticket e-mails go: their own address, the second address only, or both.
+
+### Changed
+- E-mail subjects no longer start with the organization name (`[Org] …`).
+- Ticket e-mails sent with *Send e-mail* are HTML with the signature added automatically; the draft no longer ends with the technician's name when a signature is set.
+- Signatures can be up to 20,000 characters.
+
+### Upgrade notes
+- `bash scripts/update.sh`. Migration `0013_client_mailbox` only adds two columns to `contacts` (`notify_email`, `notify_mode`); no existing data is changed.
+- Set `PUBLIC_URL` to the address clients use (e.g. `https://taskora.example.com`): signature images and buttons point there.
+
 ## [0.7.0] — 2026-11-23
 
 ### Added

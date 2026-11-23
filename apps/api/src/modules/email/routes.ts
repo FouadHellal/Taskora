@@ -10,12 +10,16 @@ import { AppError, badRequest } from '../../lib/errors.js';
 import { idOf } from '../../lib/params.js';
 import { mailSettingsInputSchema, mailSettingsView, parseAddresses, resolveSmtp, saveMailSettings, transportFor } from '../../lib/mail.js';
 import { getSystemSettings } from '../../lib/settings.js';
-import { withSignature } from '../../jobs/email.js';
+import { sendBranded } from '../../jobs/client-email.js';
+import { mailLang, mailTranslator } from '../../jobs/mail-i18n.js';
+import { loadMailBrand, renderEmail, renderSignature } from '../../lib/mail-template.js';
 import { emailTextWithImages } from '../../lib/note-images.js';
 import { addTicketNote, getTicketRow } from '../tickets/service.js';
 import { runTicketRules } from '../automation/engine.js';
 
 const testSchema = z.object({ to: z.string().trim().min(3).max(255) });
+const color = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+const previewSchema = z.object({ signature: z.string().max(20000).optional(), headerColor: color.optional(), accentColor: color.optional(), footer: z.string().max(1000).optional() });
 
 const ticketEmailSchema = z.object({
   to: z.array(z.string()).max(50).default([]),
@@ -59,18 +63,63 @@ export async function emailRoutes(app: FastifyInstance) {
     const smtp = await resolveSmtp(app.db, app.config);
     if (!smtp) throw badRequest('Outgoing e-mail is not configured yet — save the SMTP settings first');
     const settings = await getSystemSettings(app.db);
+    const tr = mailTranslator(mailLang(settings.language));
+    const me = currentUser(req);
     try {
-      await (app.mailTransport ?? transportFor(smtp)).sendMail({
-        from: smtp.from,
-        ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
-        to: addr.valid[0],
-        subject: `[${settings.organizationName}] Test e-mail from Taskora`,
-        text: withSignature(`This is a test message sent by ${currentUser(req).email}.\nOutgoing e-mail works.`, smtp.signature),
+      await sendBranded(app.db, app.config, smtp, app.mailTransport ?? transportFor(smtp), addr.valid[0]!, tr('testSubject'), {
+        preheader: tr('testP1', { email: me.email }),
+        eyebrow: 'Taskora',
+        heading: tr('testHeading'),
+        greeting: tr('helloAll'),
+        paragraphs: [tr('testP1', { email: me.email })],
+        card: { ref: 'TKA-000000', title: 'Example ticket', status: { label: 'In progress' }, facts: [[tr('ref'), 'TKA-000000'], [tr('priority'), 'Medium']] },
+        footer: tr('footerClient', { org: settings.organizationName }),
+        signature: { sender: `${me.firstName} ${me.lastName}`.trim() || tr('team', { org: settings.organizationName }) },
       });
     } catch (err) {
       throw smtpError(err);
     }
     return { ok: true, source: smtp.source };
+  });
+
+  /** Renders a sample client e-mail with the (unsaved) look and signature, for the preview on Administration → E-mail. */
+  app.post('/settings/email/preview', { config: { perm: 'settings.manage' } }, async (req) => {
+    const input = previewSchema.parse(req.body ?? {});
+    const settings = await getSystemSettings(app.db);
+    const smtp = await resolveSmtp(app.db, app.config);
+    const brand = await loadMailBrand(app.db, app.config, { signature: input.signature ?? smtp?.signature ?? '' }, settings);
+    if (input.headerColor) brand.headerColor = input.headerColor;
+    if (input.accentColor) brand.accentColor = input.accentColor;
+    if (input.footer !== undefined) brand.footerNote = input.footer;
+    // The preview has no public address to load the logo from: embed it.
+    if (brand.logo) brand.logoUrl = `data:${brand.logo.contentType};base64,${brand.logo.content.toString('base64')}`;
+    const tr = mailTranslator(mailLang(settings.language));
+    const me = currentUser(req);
+    const org = settings.organizationName;
+    const { html } = renderEmail(brand, {
+      preheader: tr('createdP1', { org, ref: 'TKA-000123' }),
+      eyebrow: tr('eyebrowCreated'),
+      heading: tr('createdHeading'),
+      greeting: tr('hello', { name: 'Amina' }),
+      paragraphs: [tr('createdP1', { org, ref: 'TKA-000123' }), tr('createdP2')],
+      card: {
+        ref: 'TKA-000123',
+        title: 'Outlook keeps asking for the password',
+        status: { label: 'New', color: '#2563eb' },
+        facts: [
+          [tr('ref'), 'TKA-000123'],
+          [tr('priority'), 'Medium'],
+          [tr('openedOn'), new Intl.DateTimeFormat(mailLang(settings.language), { dateStyle: 'medium', timeStyle: 'short', timeZone: settings.timezone }).format(new Date())],
+        ],
+      },
+      quote: { label: tr('description'), text: 'Since this morning Outlook asks for my password every few minutes.' },
+      button: { label: tr('follow'), url: `${brand.base || 'https://example.com'}/portal` },
+      hint: tr('replyHint', { ref: 'TKA-000123' }),
+      footer: tr('footerClient', { org }),
+      signature: { sender: `${me.firstName} ${me.lastName}`.trim() },
+    });
+    // The header logo is an inline attachment in real e-mails; inline it as data for the preview.
+    return { html: brand.logo ? html.replace(`cid:${brand.logo.cid}`, `data:${brand.logo.contentType};base64,${brand.logo.content.toString('base64')}`) : html };
   });
 
   /* ------------------------------------------------- e-mail from a ticket */
@@ -82,13 +131,18 @@ export async function emailRoutes(app: FastifyInstance) {
     const [contact] = t.contactId ? await app.db.select().from(s.contacts).where(eq(s.contacts.id, t.contactId)) : [];
     const me = currentUser(req);
     const greeting = contact?.firstName ? `Hello ${contact.firstName},` : 'Hello,';
+    const settings = await getSystemSettings(app.db);
+    const brand = await loadMailBrand(app.db, app.config, smtp, settings);
+    const sig = smtp ? renderSignature(smtp.signature, { sender: `${me.firstName} ${me.lastName}`.trim(), organization: settings.organizationName, logo: brand.logoUrl, portal: brand.base ? `${brand.base}/portal` : '' }) : null;
     return {
       enabled: !!smtp,
       from: smtp?.from ?? null,
       to: contact?.email ? [contact.email] : [],
       subject: `[${t.ticketNumber}] ${t.title}`,
-      body: `${greeting}\n\n\n\n${me.firstName} ${me.lastName}`,
-      signature: smtp?.signature ?? '',
+      // The signature (with the sender's name) is added when the e-mail is sent.
+      body: sig ? `${greeting}\n\n` : `${greeting}\n\n\n\n${me.firstName} ${me.lastName}`,
+      signature: sig?.text ?? '',
+      signatureHtml: sig?.html ?? '',
     };
   });
 
@@ -125,22 +179,29 @@ export async function emailRoutes(app: FastifyInstance) {
     const mail = await emailTextWithImages(app.db, app.config.UPLOAD_DIR, id, input.body, input.attachmentIds);
     attachments.push(...mail.attachments);
 
+    const me = currentUser(req);
+    const settings = await getSystemSettings(app.db);
+    const tr = mailTranslator(mailLang(settings.language));
     try {
-      await (app.mailTransport ?? transportFor(smtp)).sendMail({
-        from: smtp.from,
-        ...(smtp.replyTo ? { replyTo: smtp.replyTo } : {}),
-        to: to.valid,
-        ...(cc.valid.length ? { cc: cc.valid } : {}),
-        ...(bcc.valid.length ? { bcc: bcc.valid } : {}),
+      await sendBranded(
+        app.db,
+        app.config,
+        smtp,
+        app.mailTransport ?? transportFor(smtp),
+        to.valid,
         subject,
-        text: withSignature(mail.text, smtp.signature),
-        attachments,
-      });
+        {
+          preheader: mail.text.slice(0, 120),
+          paragraphs: mail.text.split(/\n{2,}/).filter((x) => x.trim()),
+          footer: tr('ticketFooter', { ref: ticket.ticketNumber }),
+          signature: { sender: `${me.firstName} ${me.lastName}`.trim() || tr('team', { org: settings.organizationName }) },
+        },
+        { cc: cc.valid, bcc: bcc.valid, attachments },
+      );
     } catch (err) {
       throw smtpError(err);
     }
 
-    const me = currentUser(req);
     const recipients = { to: to.valid, cc: cc.valid, bcc: bcc.valid };
     const result = await app.db.transaction(async (tx) => {
       let noteId: number | null = null;

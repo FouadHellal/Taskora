@@ -4,6 +4,7 @@ import type { Config } from '../config.js';
 import type { Tx } from '../db/client.js';
 import { systemSettings } from '../db/schema/index.js';
 import { decryptJson, encryptJson } from './crypto.js';
+import { resolveSmtp } from './mail.js';
 
 /**
  * Inbound e-mail (IMAP) mailbox, configurable in the UI (Settings → E-mail to ticket).
@@ -20,6 +21,8 @@ const storedSchema = z.object({
   user: z.string().default(''),
   passwordEncrypted: z.string().nullable().default(null),
   mailbox: z.string().default('INBOX'),
+  /** Read the same mailbox that sends (Administration → E-mail): its user and password are reused. */
+  useSmtpAccount: z.boolean().default(false),
 });
 type Stored = z.infer<typeof storedSchema>;
 
@@ -32,6 +35,7 @@ export const imapSettingsInputSchema = z.object({
   /** Omitted keeps the stored password; empty string clears it. */
   password: z.string().max(1000).optional(),
   mailbox: z.string().trim().min(1).max(255).default('INBOX'),
+  useSmtpAccount: z.boolean().default(false),
 });
 
 export interface ImapSettings {
@@ -49,9 +53,30 @@ async function readStored(db: Tx): Promise<Stored> {
   return storedSchema.parse(row?.value ?? {});
 }
 
+/** IMAP server of a well-known SMTP host (smtp.gmail.com → imap.gmail.com). */
+export function imapHostFor(smtpHost: string) {
+  const h = smtpHost.trim().toLowerCase();
+  if (h === 'smtp.gmail.com') return 'imap.gmail.com';
+  if (h === 'smtp.office365.com' || h === 'smtp-mail.outlook.com') return 'outlook.office365.com';
+  return h.replace(/^smtp\./, 'imap.');
+}
+
 /** The mailbox in effect (UI settings first, then environment) or null. */
 export async function resolveImap(db: Tx, config: Config): Promise<ImapSettings | null> {
   const stored = await readStored(db);
+  if (stored.enabled && stored.useSmtpAccount) {
+    const smtp = await resolveSmtp(db, config);
+    if (!smtp?.user || !smtp.password) return null;
+    return {
+      source: 'settings',
+      host: stored.host || imapHostFor(smtp.host),
+      port: stored.port || 993,
+      secure: stored.secure,
+      user: smtp.user,
+      password: smtp.password,
+      mailbox: stored.mailbox,
+    };
+  }
   if (stored.enabled && stored.host && stored.user) {
     let password = '';
     try {
@@ -99,6 +124,7 @@ export async function saveImapSettings(db: Tx, config: Config, input: z.infer<ty
     user: input.user,
     passwordEncrypted,
     mailbox: input.mailbox,
+    useSmtpAccount: input.useSmtpAccount,
   };
   await db.insert(systemSettings).values({ key: KEY, value }).onConflictDoUpdate({ target: systemSettings.key, set: { value } });
 }

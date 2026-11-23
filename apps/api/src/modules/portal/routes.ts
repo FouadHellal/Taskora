@@ -26,6 +26,8 @@ import { getSystemSettings, type SystemSettings } from '../../lib/settings.js';
 import { addTicketNote, createTicket, updateTicket } from '../tickets/service.js';
 import { runTicketRules } from '../automation/engine.js';
 import { enqueue } from '../../jobs/queue.js';
+import { sendBranded } from '../../jobs/client-email.js';
+import { mailLang, mailTranslator } from '../../jobs/mail-i18n.js';
 import { registerPortalEngagement } from './engagement.js';
 import { resolveSmtp, transportFor } from '../../lib/mail.js';
 import { INLINE_IMAGE_TYPES, portalImageUrls } from '../../lib/note-images.js';
@@ -112,10 +114,24 @@ const staffName = sql<string | null>`nullif(trim(coalesce(${s.users.firstName}, 
 
 const baseUrl = (app: FastifyInstance, req: FastifyRequest) => (app.config.PUBLIC_URL ?? `${req.protocol}://${req.headers.host}`).replace(/\/$/, '');
 
-async function sendPortalMail(app: FastifyInstance, req: FastifyRequest, to: string, subject: string, text: string) {
+/** Portal invitation / password e-mails, branded like every other e-mail. */
+async function sendPortalMail(app: FastifyInstance, to: string, kind: 'invite' | 'reset', vars: { name: string; link: string; base: string }) {
   const smtp = await resolveSmtp(app.db, app.config);
   if (!smtp) return false;
-  await (app.mailTransport ?? transportFor(smtp)).sendMail({ from: smtp.from, to, subject, text });
+  const settings = await getSystemSettings(app.db);
+  const t = mailTranslator(mailLang(settings.language));
+  const org = settings.organizationName;
+  const invite = kind === 'invite';
+  await sendBranded(app.db, app.config, smtp, app.mailTransport ?? transportFor(smtp), to, invite ? t('inviteSubject', { org }) : t('resetSubject'), {
+    preheader: invite ? t('inviteP1', { org }) : t('resetP1'),
+    heading: invite ? t('inviteHeading') : t('resetHeading'),
+    greeting: t('hello', { name: vars.name }),
+    paragraphs: invite ? [t('inviteP1', { org }), t('inviteP2', { url: `${vars.base}/portal`, email: to })] : [t('resetP1')],
+    button: { label: invite ? t('inviteButton') : t('resetButton'), url: vars.link },
+    hint: invite ? undefined : t('resetP2'),
+    footer: t('footerClient', { org }),
+    signature: { sender: t('team', { org }) },
+  });
   return true;
 }
 
@@ -196,13 +212,7 @@ export async function portalRoutes(app: FastifyInstance) {
         if (contact && (await resolveSmtp(app.db, app.config))) {
           const token = await createPortalResetToken(app.db, contact.id);
           const link = `${baseUrl(app, req)}/portal/reset?token=${encodeURIComponent(token)}`;
-          await sendPortalMail(
-            app,
-            req,
-            contact.email!,
-            'Reset your client portal password',
-            `Hello ${contact.firstName},\n\nUse this link within one hour to choose a new password:\n${link}\n\nIf you did not request this, you can ignore this e-mail.`,
-          ).catch((err: Error) => req.log.warn({ err: err.message }, 'portal reset e-mail failed'));
+          await sendPortalMail(app, contact.email!, 'reset', { name: contact.firstName, link, base: baseUrl(app, req) }).catch((err: Error) => req.log.warn({ err: err.message }, 'portal reset e-mail failed'));
         }
         return { ok: true };
       });
@@ -872,13 +882,7 @@ export async function portalAdminRoutes(app: FastifyInstance) {
       const settings = await getSystemSettings(app.db);
       const base = baseUrl(app, req);
       const link = `${base}/portal/reset?token=${encodeURIComponent(token)}&invite=1`;
-      await sendPortalMail(
-        app,
-        req,
-        contact.email!,
-        `Your access to the ${settings.organizationName} client portal`,
-        `Hello ${contact.firstName},\n\n${settings.organizationName} gave you access to its client portal, where you can open support requests, follow your tickets and keep your company documentation.\n\nChoose your password with this link (valid for 7 days):\n${link}\n\nAfterwards, sign in at ${base}/portal with ${contact.email}.`,
-      );
+      await sendPortalMail(app, contact.email!, 'invite', { name: contact.firstName, link, base });
       invited = true;
     }
     const summary = !input.enabled

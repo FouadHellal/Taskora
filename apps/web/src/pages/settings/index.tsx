@@ -423,6 +423,7 @@ interface ImapState {
   secure: boolean;
   user: string;
   mailbox: string;
+  useSmtpAccount: boolean;
   hasPassword: boolean;
   environmentConfigured: boolean;
   environmentHost: string | null;
@@ -450,6 +451,7 @@ function EmailToTicket() {
         secure: f.secure !== false,
         user: f.user ?? '',
         mailbox: f.mailbox || 'INBOX',
+        useSmtpAccount: !!f.useSmtpAccount,
         ...(f.password !== undefined ? { password: f.password } : {}),
       });
       await api.put('/settings/system', routing);
@@ -487,6 +489,22 @@ function EmailToTicket() {
             </p>
           )}
           <Checkbox label="Turn incoming e-mail into tickets" checked={!!f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })} />
+          <div className="rounded-md border border-primary/30 bg-primary-soft/30 p-3">
+            <Checkbox
+              label="Use the same mailbox as outgoing e-mail (recommended)"
+              checked={!!f.useSmtpAccount}
+              onChange={(e) => setF({ ...f, useSmtpAccount: e.target.checked, ...(e.target.checked ? { host: '', port: 993, secure: true } : {}) })}
+            />
+            <p className="ml-6 mt-1 text-xs text-muted">
+              One mailbox for everything: Taskora sends from the account of{' '}
+              <Link to="/admin/email" className="text-primary hover:underline">
+                Administration → E-mail
+              </Link>{' '}
+              and reads the replies from that same inbox with the same user and app password (Gmail: imap.gmail.com, filled in automatically). Clients simply answer the e-mails they receive and
+              their reply lands in the ticket. In Gmail, IMAP is on by default.
+            </p>
+          </div>
+          {!f.useSmtpAccount && (
           <FormGrid cols={3}>
             <FormField label="IMAP server">
               <Input value={f.host ?? ''} onChange={(e) => setF({ ...f, host: e.target.value })} placeholder="outlook.office365.com" />
@@ -514,6 +532,7 @@ function EmailToTicket() {
               />
             </FormField>
           </FormGrid>
+          )}
           <FormSection title="Routing">
             <FormGrid cols={2}>
               <FormField label="Company for unknown senders" hint="Leave empty to reject e-mail from addresses that match no contact or company domain">

@@ -167,6 +167,17 @@ Taskora sends every e-mail (IT alerts, client confirmations, monthly reports, in
 
 Gmail limits a normal account to about 500 messages a day, which is plenty for a service desk. The same can be set with `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM` in `.env`; the UI settings take precedence.
 
+### One mailbox for sending and receiving
+
+Use the same Gmail account for everything so the whole conversation stays on the tickets:
+
+1. **Administration → E-mail**: the Gmail account and app password (above). Leave *Reply-To* empty so clients answer the same address.
+2. **Settings → E-mail to ticket**: tick *Turn incoming e-mail into tickets* and *Use the same mailbox as outgoing e-mail*, save, then *Test connection*. Taskora reads `imap.gmail.com` with the same user and app password every minute: a reply with `[TKA-…]` in the subject becomes a note on that ticket, any other e-mail becomes a new ticket.
+
+### Look of the e-mails and signature
+
+**Administration → E-mail → Look of the e-mails and signature**: upload the e-mail logo (a version made for the header colour), pick the header and accent colours, add a footer line and the signature (plain text or HTML with `{{sender}}`, `{{organization}}`, `{{logo}}`, `{{portal}}`). The preview shows a client e-mail as it will be sent. Images in the signature must be reachable from the internet, so `PUBLIC_URL` must be the public HTTPS address.
+
 ### Alerts, reports and billing
 
 - **Administration → Client portal → E-mail notifications**: the IT team addresses alerted about every new ticket and client reply, and the switch for e-mails to clients.

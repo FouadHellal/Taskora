@@ -38,7 +38,7 @@ export const mailSettingsInputSchema = z.object({
   password: z.string().max(1000).optional(),
   from: z.string().trim().max(255),
   replyTo: z.string().trim().max(255).default(''),
-  signature: z.string().max(4000).default(''),
+  signature: z.string().max(20000).default(''),
 });
 export type MailSettingsInput = z.infer<typeof mailSettingsInputSchema>;
 

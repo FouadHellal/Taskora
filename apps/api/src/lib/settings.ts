@@ -70,6 +70,15 @@ export const systemSettingsSchema = z.object({
   staffAlertOnClientReply: z.boolean().default(true),
   /** Master switch for e-mails to clients (confirmation, resolved, monthly report). Each contact can still opt out. */
   clientEmailsEnabled: z.boolean().default(true),
+  /* E-mail look (Administration → E-mail). */
+  /** Background of the e-mail header (behind the logo). */
+  emailHeaderColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).catch('#ffffff').default('#ffffff'),
+  /** Buttons, links and highlights in e-mails. */
+  emailAccentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).catch('#2563eb').default('#2563eb'),
+  /** Extra line in the footer of every e-mail (address, legal text…). */
+  emailFooter: z.string().max(1000).default(''),
+  /** Set when the e-mail logo changes. */
+  emailLogoUpdatedAt: z.string().nullable().default(null),
   /* Monthly client reports. */
   /** 'off', 'draft' (prepared for review) or 'publish' (published and e-mailed automatically). */
   reportsAutoMode: z.enum(['off', 'draft', 'publish']).default('draft'),

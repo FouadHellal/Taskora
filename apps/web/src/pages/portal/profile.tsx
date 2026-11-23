@@ -191,6 +191,9 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 type PrefKey = 'ticketCreated' | 'ticketReplies' | 'ticketResolved' | 'monthlyReport' | 'companyTickets';
 interface Prefs {
   email: string | null;
+  notifyEmail: string | null;
+  notifyMode: 'main' | 'other' | 'both';
+  sendsTo: string[];
   preferences: Record<PrefKey, boolean>;
   isManager: boolean;
   clientEmailsEnabled: boolean;
@@ -209,14 +212,17 @@ function EmailPreferences() {
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ['portal-email-prefs'], queryFn: () => papi<Prefs>('GET', '/profile/notifications') });
   const save = useMutation({
-    mutationFn: (patch: Partial<Record<PrefKey, boolean>>) => papi<{ preferences: Prefs['preferences'] }>('PUT', '/profile/notifications', patch),
+    mutationFn: (patch: Partial<Record<PrefKey, boolean>> & { notifyEmail?: string; notifyMode?: Prefs['notifyMode'] }) =>
+      papi<Pick<Prefs, 'preferences' | 'notifyEmail' | 'notifyMode' | 'sendsTo'>>('PUT', '/profile/notifications', patch),
     onSuccess: (r) => {
-      qc.setQueryData<Prefs>(['portal-email-prefs'], (old) => (old ? { ...old, preferences: r.preferences } : old));
+      qc.setQueryData<Prefs>(['portal-email-prefs'], (old) => (old ? { ...old, ...r } : old));
       toast.success(t('Saved'));
     },
     onError: (e: Error) => toast.error(e.message),
   });
   const p = q.data;
+  const [other, setOther] = useState<string | null>(null);
+  const otherValue = other ?? p?.notifyEmail ?? '';
   return (
     <Card>
       <CardHeader
@@ -225,7 +231,7 @@ function EmailPreferences() {
             <Mail className="size-4 text-primary" /> {t('E-mails I receive')}
           </span>
         }
-        description={p?.email ? t('Sent to {email}', { email: p.email }) : t('Your contact has no e-mail address: ask your IT team to add one.')}
+        description={p?.sendsTo.length ? t('Sent to {email}', { email: p.sendsTo.join(', ') }) : t('Your contact has no e-mail address: ask your IT team to add one.')}
       />
       <CardBody className="space-y-3 text-[13px]">
         {!p ? (
@@ -233,9 +239,45 @@ function EmailPreferences() {
         ) : (
           <>
             {!p.clientEmailsEnabled && <p className="rounded bg-warning-soft px-3 py-2 text-[12px] text-warning">{t('E-mails to clients are currently turned off by your IT team.')}</p>}
+            <div className="space-y-2 rounded-md border border-border bg-surface-2 p-3">
+              <div className="text-[12px] font-medium">{t('Where should we send them?')}</div>
+              <div className="flex flex-wrap gap-1.5">
+                {(['main', 'other', 'both'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    disabled={save.isPending || (m !== 'main' && !otherValue.trim())}
+                    onClick={() => save.mutate({ notifyMode: m, ...(m !== 'main' ? { notifyEmail: otherValue.trim() } : {}) })}
+                    className={cn(
+                      'cursor-pointer rounded-md border px-2.5 py-1.5 text-[12px] disabled:cursor-not-allowed disabled:opacity-50',
+                      p.notifyMode === m ? 'border-primary bg-primary-soft font-medium text-primary' : 'border-border bg-surface hover:border-border-strong',
+                    )}
+                  >
+                    {t(m === 'main' ? 'My address' : m === 'other' ? 'The second address only' : 'Both addresses')}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Input
+                  type="email"
+                  className="max-w-72"
+                  placeholder={t('Second address, e.g. it-requests@company.com')}
+                  value={otherValue}
+                  onChange={(e) => setOther(e.target.value)}
+                />
+                <Button size="sm" disabled={save.isPending || otherValue.trim() === (p.notifyEmail ?? '')} onClick={() => save.mutate({ notifyEmail: otherValue.trim() })}>
+                  {t('Save address')}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted">
+                {p.sendsTo.length ? t('E-mails currently go to: {list}', { list: p.sendsTo.join(', ') }) : t('No address yet.')}
+                <br />
+                {t('Use a shared mailbox if you do not want these e-mails in your own inbox.')}
+              </p>
+            </div>
             {PREF_ROWS.filter((r) => !r.managers || p.isManager).map((r) => (
               <div key={r.key} className="flex items-start gap-3">
-                <Switch checked={p.preferences[r.key]} disabled={save.isPending || !p.email} onChange={(v) => save.mutate({ [r.key]: v })} label={undefined} />
+                <Switch checked={p.preferences[r.key]} disabled={save.isPending || !p.sendsTo.length} onChange={(v) => save.mutate({ [r.key]: v })} label={undefined} />
                 <div className="leading-tight">
                   <div className="font-medium">{t(r.label)}</div>
                   <div className="text-[11px] text-muted">{t(r.hint)}</div>

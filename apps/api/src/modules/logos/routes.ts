@@ -39,11 +39,11 @@ export function decodeLogo(dataUrl: string): { mimeType: string; data: string } 
   return { mimeType, data: bytes.toString('base64') };
 }
 
-type Kind = 'company' | 'organization';
+type Kind = 'company' | 'organization' | 'email';
 
 function target(req: FastifyRequest): { kind: Kind; id: number } {
   const { kind } = req.params as { kind: string };
-  if (kind === 'organization') return { kind, id: 0 };
+  if (kind === 'organization' || kind === 'email') return { kind, id: 0 };
   if (kind === 'company') return { kind, id: idOf(req) };
   throw notFound('Logo');
 }
@@ -61,6 +61,8 @@ export async function logoRoutes(app: FastifyInstance) {
 
   // The organization logo is shown on the sign-in pages, so it is public.
   app.get('/logos/organization', { config: { public: true } }, async (_req, reply) => serve('organization', 0, reply));
+  // The e-mail logo is shown in e-mails and HTML signatures, so it is public too.
+  app.get('/logos/email', { config: { public: true } }, async (_req, reply) => serve('email', 0, reply));
   app.get('/logos/company/:id', { config: { perm: 'companies.read' } }, async (req, reply) => serve('company', idOf(req), reply));
 
   app.put('/logos/:kind/:id?', async (req) => {
@@ -73,6 +75,9 @@ export async function logoRoutes(app: FastifyInstance) {
         const [row] = await tx.update(s.companies).set({ logoUpdatedAt: now }).where(eq(s.companies.id, t.id)).returning({ id: s.companies.id, name: s.companies.name });
         if (!row) throw notFound('Company');
         await audit(tx, req, { action: 'update', entityType: 'company', entityId: t.id, summary: `Logo updated for ${row.name}` });
+      } else if (t.kind === 'email') {
+        await saveSystemSettings(tx, { emailLogoUpdatedAt: now.toISOString() });
+        await audit(tx, req, { action: 'update', entityType: 'system_settings', summary: 'E-mail logo updated' });
       } else {
         await saveSystemSettings(tx, { logoUpdatedAt: now.toISOString() });
         await audit(tx, req, { action: 'update', entityType: 'system_settings', summary: 'Organization logo updated' });
@@ -91,6 +96,7 @@ export async function logoRoutes(app: FastifyInstance) {
     await app.db.transaction(async (tx) => {
       await tx.delete(s.logos).where(and(eq(s.logos.entityType, t.kind), eq(s.logos.entityId, t.id)));
       if (t.kind === 'company') await tx.update(s.companies).set({ logoUpdatedAt: null }).where(eq(s.companies.id, t.id));
+      else if (t.kind === 'email') await saveSystemSettings(tx, { emailLogoUpdatedAt: null });
       else await saveSystemSettings(tx, { logoUpdatedAt: null });
       await audit(tx, req, { action: 'delete', entityType: t.kind === 'company' ? 'company' : 'system_settings', entityId: t.kind === 'company' ? t.id : null, summary: 'Logo removed' });
     });

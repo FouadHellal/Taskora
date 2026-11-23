@@ -20,6 +20,7 @@ interface Draft {
   subject: string;
   body: string;
   signature: string;
+  signatureHtml?: string;
 }
 
 interface AttachmentRow {
@@ -141,11 +142,18 @@ export function SendEmailDialog({ ticket, open, onOpenChange, onSent }: { ticket
           <FormField label="Message" required>
             <ImageTextarea ticketId={ticket.id} rows={10} value={body} onValueChange={setBody} onBusyChange={setUploading} />
           </FormField>
-          {d.signature && (
-            <pre className="whitespace-pre-wrap rounded-md bg-surface-2 px-3 py-2 font-sans text-xs text-muted">
-              {'-- \n'}
-              {d.signature}
-            </pre>
+          {d.signatureHtml ? (
+            <div>
+              <div className="mb-1 text-[11px] text-muted">Signature (added automatically)</div>
+              <iframe title="Signature" sandbox="" srcDoc={`<body style="margin:0;font-family:Arial,sans-serif">${d.signatureHtml}</body>`} className="h-36 w-full rounded-md border border-border bg-white" />
+            </div>
+          ) : (
+            d.signature && (
+              <pre className="whitespace-pre-wrap rounded-md bg-surface-2 px-3 py-2 font-sans text-xs text-muted">
+                {'-- \n'}
+                {d.signature}
+              </pre>
+            )
           )}
           {!!files.data?.data.length && (
             <FormField label="Attach files from this ticket">

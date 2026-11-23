@@ -5,6 +5,8 @@ import { schema } from '../src/db/client.js';
 import { loadConfig } from '../src/config.js';
 import { sendClientReplyAlert, sendReportPublishedEmails, sendTicketCreatedEmails, sendTicketResolvedEmail } from '../src/jobs/client-email.js';
 import { runMonthlyReports } from '../src/modules/client-reports/service.js';
+import { renderSignature, sanitizeEmailHtml } from '../src/lib/mail-template.js';
+import { imapHostFor } from '../src/lib/imap-settings.js';
 
 let ctx: TestContext;
 let admin: Client & { userId: number };
@@ -238,5 +240,57 @@ describe('service agreement in the portal', () => {
     expect(insights.devices.length).toBeGreaterThan(0);
     expect(insights.trend).toHaveLength(6);
     expect(insights).toHaveProperty('health');
+  });
+});
+
+describe('mailboxes and signatures', () => {
+  it('sends client e-mails to the main address, a second mailbox or both', async () => {
+    const { co, noah, noahPortal } = await clientCompany('Mailbox Co');
+    expect((await noahPortal.put('/api/portal/profile/notifications', { notifyMode: 'other' })).status).toBe(400);
+    const saved = await noahPortal.put('/api/portal/profile/notifications', { notifyEmail: 'IT-Inbox@Mailbox.example', notifyMode: 'other' });
+    expect(saved.body).toMatchObject({ notifyMode: 'other', sendsTo: ['it-inbox@mailbox.example'] });
+    const { sent, transport } = mailbox();
+    const t1 = (await admin.post('/api/v1/tickets', { title: 'Scanner', companyId: co.id, contactId: noah.id })).body;
+    await sendTicketCreatedEmails(ctx.db, smtp, t1.id, transport);
+    expect(sent.map((m) => m.to)).toContain('it-inbox@mailbox.example');
+    expect(sent.map((m) => m.to)).not.toContain(noah.email);
+
+    await noahPortal.put('/api/portal/profile/notifications', { notifyMode: 'both' });
+    sent.length = 0;
+    const t2 = (await admin.post('/api/v1/tickets', { title: 'Screen', companyId: co.id, contactId: noah.id })).body;
+    await sendTicketCreatedEmails(ctx.db, smtp, t2.id, transport);
+    expect(sent.find((m) => Array.isArray(m.to) && m.to.includes(noah.email))!.to).toEqual([noah.email, 'it-inbox@mailbox.example']);
+    expect((await noahPortal.put('/api/portal/profile/notifications', { notifyEmail: 'not-an-address' })).status).toBe(400);
+  });
+
+  it('renders HTML signatures safely, with placeholders, and keeps the organization name out of subjects', async () => {
+    const sig = renderSignature('<table><tr><td><img src="{{logo}}" onerror="x()"><b>{{sender}}</b></td></tr></table><script>alert(1)</script><a href="javascript:alert(1)">x</a>', {
+      sender: 'Zakaria <T>',
+      organization: 'Sirius',
+      logo: 'https://psa.example.test/api/v1/logos/email',
+      portal: '',
+    })!;
+    expect(sig.html).toContain('<b>Zakaria &lt;T&gt;</b>');
+    expect(sig.html).toContain('src="https://psa.example.test/api/v1/logos/email"');
+    expect(sig.html).not.toMatch(/script|onerror|javascript:/i);
+    expect(sig.text).toContain('Zakaria <T>');
+    expect(sanitizeEmailHtml('<p style="color:red">ok</p><iframe src="x"></iframe>')).toBe('<p style="color:red">ok</p>');
+    expect(renderSignature('Kind regards,\n{{sender}}', { sender: 'Mia', organization: 'O', logo: '', portal: '' })!.text).toBe('Kind regards,\nMia');
+
+    // The stored signature is appended to client e-mails; subjects carry no organization prefix.
+    await admin.put('/api/v1/settings/email', { enabled: false, host: '', port: 587, secure: false, from: '', signature: '<div class="sig">Best, <b>{{sender}}</b> — {{organization}}</div>' });
+    await admin.put('/api/v1/settings/system', { organizationName: 'Fouad Org', emailHeaderColor: '#0b0b14', emailAccentColor: '#8c52ff' });
+    const { co, mia } = await clientCompany('Signature Co');
+    const { sent, transport } = mailbox();
+    const t = (await admin.post('/api/v1/tickets', { title: 'Wi-Fi', companyId: co.id, contactId: mia.id })).body;
+    await sendTicketCreatedEmails(ctx.db, smtp, t.id, transport);
+    const client = sent.find((m) => m.to === mia.email)!;
+    expect(client.html).toContain('<div class="sig">Best, <b>The Fouad Org team</b> — Fouad Org</div>');
+    expect(client.html).toContain('background:#0b0b14');
+    expect(client.html).toContain('#8c52ff');
+    expect(client.text).toContain('Best, The Fouad Org team');
+    expect(sent.every((m) => !m.subject.includes('[Fouad Org]'))).toBe(true);
+    expect(imapHostFor('smtp.gmail.com')).toBe('imap.gmail.com');
+    expect(imapHostFor('smtp.example.com')).toBe('imap.example.com');
   });
 });

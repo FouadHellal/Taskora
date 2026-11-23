@@ -22,9 +22,10 @@ function hueOf(name?: string | null) {
   return h;
 }
 
-export function logoUrl(kind: 'company' | 'organization', id: number | null | undefined, version: string | null | undefined) {
+export function logoUrl(kind: 'company' | 'organization' | 'email', id: number | null | undefined, version: string | null | undefined) {
   if (!version) return null;
   const v = encodeURIComponent(version);
+  if (kind === 'email') return `/api/v1/logos/email?v=${v}`;
   return kind === 'organization' ? `/api/v1/logos/organization?v=${v}` : `/api/v1/logos/company/${id}?v=${v}`;
 }
 
@@ -93,8 +94,14 @@ export function LogoEditor({
   logoUpdatedAt,
   onChanged,
   disabled,
+  maxSize = 256,
+  previewBg,
 }: {
-  kind: 'company' | 'organization';
+  kind: 'company' | 'organization' | 'email';
+  /** Longest side of the uploaded image, in pixels. */
+  maxSize?: number;
+  /** Background behind the preview (e.g. the e-mail header colour). */
+  previewBg?: string;
   id?: number;
   name?: string | null;
   logoUpdatedAt?: string | null;
@@ -103,7 +110,7 @@ export function LogoEditor({
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
-  const path = kind === 'organization' ? '/logos/organization' : `/logos/company/${id}`;
+  const path = kind === 'organization' ? '/logos/organization' : kind === 'email' ? '/logos/email' : `/logos/company/${id}`;
   const run = async (fn: () => Promise<unknown>, done: string) => {
     setBusy(true);
     try {
@@ -122,7 +129,7 @@ export function LogoEditor({
       {kind === 'company' ? (
         <CompanyLogo companyId={id} name={name} logoUpdatedAt={logoUpdatedAt} className="size-14 text-base" />
       ) : src ? (
-        <img src={src} alt="" className="size-14 rounded bg-white object-contain ring-1 ring-border" />
+        <img src={src} alt="" className={kind === 'email' ? 'h-14 max-w-48 rounded object-contain p-1.5 ring-1 ring-border' : 'size-14 rounded bg-white object-contain ring-1 ring-border'} style={{ backgroundColor: previewBg ?? '#ffffff' }} />
       ) : (
         <img src="/favicon.svg" alt="" className="size-14 rounded p-2 opacity-60 ring-1 ring-border" />
       )}
@@ -137,7 +144,7 @@ export function LogoEditor({
             </Button>
           )}
         </div>
-        <p className="text-[11px] text-muted">PNG, JPEG, WebP, GIF or SVG — resized to 256 px.</p>
+        <p className="text-[11px] text-muted">PNG, JPEG, WebP, GIF or SVG — resized to {maxSize} px.</p>
       </div>
       <input
         ref={input}
@@ -149,7 +156,7 @@ export function LogoEditor({
           e.target.value = '';
           if (!file) return;
           if (file.size > 10 * 1024 * 1024) return void toast.error('Choose an image smaller than 10 MB');
-          void run(async () => api.put(path, { dataUrl: await imageToDataUrl(file) }), 'Logo updated');
+          void run(async () => api.put(path, { dataUrl: await imageToDataUrl(file, maxSize) }), 'Logo updated');
         }}
       />
     </div>

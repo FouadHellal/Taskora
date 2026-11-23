@@ -238,6 +238,9 @@ The **client portal** is a separate, simpler website for the contacts of your cl
 - **Client e-mails** (professional HTML, in your organization language): confirmation with the reference when a request is opened, the reply when a technician ticks *E-mail the contact*, a notice with the solution when it is **resolved**, and the **monthly report**.
 - Each client chooses what they receive in the portal under **My account → E-mails I receive**. Managers can also ask for a copy of every new request of their company.
 - E-mails go out through [Administration → E-mail](/admin/email). For Gmail: host *smtp.gmail.com*, port *587*, TLS unticked, the full address as user and an **app password** (Google account → Security → 2-Step Verification → App passwords).
+- Clients can add a **second mailbox** and choose where ticket e-mails go (their address, the second one, or both).
+- **One mailbox for everything**: in [Settings → E-mail to ticket](/settings?tab=email) tick *Use the same mailbox as outgoing e-mail*; client replies then come back into their tickets.
+- **Look and signature**: in [Administration → E-mail](/admin/email) upload the e-mail logo, choose the colours and write the signature (HTML allowed, with {{sender}}, {{organization}}, {{logo}} and {{portal}}); the preview shows the result.
 
 ### Monthly reports
 - [Client reports](/client-reports) (also the **Reports** tab of a company): **Prepare a report** for a month. Taskora takes the figures of that month: requests opened and resolved, resolution time, response times met, time spent, devices, warranties and the **Action1** patch status, plus an **IT health score** out of 100.

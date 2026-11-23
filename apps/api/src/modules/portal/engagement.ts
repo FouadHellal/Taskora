@@ -7,10 +7,10 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { and, asc, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
 import * as s from '../../db/schema/index.js';
-import { forbidden, notFound } from '../../lib/errors.js';
+import { badRequest, forbidden, notFound } from '../../lib/errors.js';
 import { idOf } from '../../lib/params.js';
 import type { SystemSettings } from '../../lib/settings.js';
-import { EMAIL_PREF_KEYS, emailPrefs } from '../../jobs/client-email.js';
+import { contactAddresses, EMAIL_PREF_KEYS, emailPrefs, NOTIFY_MODES } from '../../jobs/client-email.js';
 import { contractBalances } from '../contracts/coverage.js';
 import { PERIOD_MONTHS, refreshAutoQuantities } from '../contracts/quantities.js';
 import { healthScore, securityHealthParts, securitySnapshot } from '../client-reports/service.js';
@@ -19,7 +19,13 @@ import type { PortalContact } from './routes.js';
 
 type Contact = PortalContact;
 
-const prefsSchema = z.object(Object.fromEntries(EMAIL_PREF_KEYS.map((k) => [k, z.boolean().optional()])) as Record<(typeof EMAIL_PREF_KEYS)[number], z.ZodOptional<z.ZodBoolean>>);
+const prefsSchema = z.object({
+  ...(Object.fromEntries(EMAIL_PREF_KEYS.map((k) => [k, z.boolean().optional()])) as Record<(typeof EMAIL_PREF_KEYS)[number], z.ZodOptional<z.ZodBoolean>>),
+  /** Second mailbox for ticket e-mails (empty clears it). */
+  notifyEmail: z.union([z.literal(''), z.string().trim().toLowerCase().email('Enter a valid e-mail address').max(255)]).optional(),
+  /** Where e-mails go: the main address, the second one, or both. */
+  notifyMode: z.enum(NOTIFY_MODES).optional(),
+});
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const todayIso = () => new Date().toISOString().slice(0, 10);
@@ -67,18 +73,40 @@ export function registerPortalEngagement(
 
   portal.get('/profile/notifications', async (req) => {
     const c = contactOf(req);
-    const [row] = await app.db.select({ prefs: s.contacts.emailPreferences, email: s.contacts.email }).from(s.contacts).where(eq(s.contacts.id, c.id));
-    return { email: row?.email ?? null, preferences: emailPrefs(row?.prefs), isManager: c.isManager, clientEmailsEnabled: helpers.settings().clientEmailsEnabled };
+    const [row] = await app.db
+      .select({ prefs: s.contacts.emailPreferences, email: s.contacts.email, notifyEmail: s.contacts.notifyEmail, notifyMode: s.contacts.notifyMode })
+      .from(s.contacts)
+      .where(eq(s.contacts.id, c.id));
+    return {
+      email: row?.email ?? null,
+      notifyEmail: row?.notifyEmail ?? null,
+      notifyMode: row?.notifyMode ?? 'main',
+      sendsTo: row ? contactAddresses(row) : [],
+      preferences: emailPrefs(row?.prefs),
+      isManager: c.isManager,
+      clientEmailsEnabled: helpers.settings().clientEmailsEnabled,
+    };
   });
 
   portal.put('/profile/notifications', async (req) => {
     const c = contactOf(req);
     const input = prefsSchema.parse(req.body);
-    const [row] = await app.db.select({ prefs: s.contacts.emailPreferences }).from(s.contacts).where(eq(s.contacts.id, c.id));
-    const merged = { ...emailPrefs(row?.prefs), ...Object.fromEntries(Object.entries(input).filter(([, v]) => typeof v === 'boolean')) };
+    const [row] = await app.db.select({ prefs: s.contacts.emailPreferences, email: s.contacts.email }).from(s.contacts).where(eq(s.contacts.id, c.id));
+    const flags = Object.fromEntries(EMAIL_PREF_KEYS.filter((k) => typeof input[k] === 'boolean').map((k) => [k, input[k]]));
+    const merged = { ...emailPrefs(row?.prefs), ...flags };
     if (!c.isManager) merged.companyTickets = false;
-    await app.db.update(s.contacts).set({ emailPreferences: merged }).where(eq(s.contacts.id, c.id));
-    return { preferences: merged };
+    const data: Partial<typeof s.contacts.$inferInsert> = { emailPreferences: merged };
+    if (input.notifyEmail !== undefined) data.notifyEmail = input.notifyEmail || null;
+    if (input.notifyMode !== undefined) data.notifyMode = input.notifyMode;
+    const mode = data.notifyMode;
+    const other = data.notifyEmail;
+    if (mode && mode !== 'main' && !(other ?? (await app.db.select({ v: s.contacts.notifyEmail }).from(s.contacts).where(eq(s.contacts.id, c.id)))[0]?.v)) {
+      throw badRequest('Enter the second address first', { fields: { notifyEmail: 'Required' } });
+    }
+    if (!row?.email && mode === 'main') throw badRequest('Your contact has no main e-mail address — use the second address');
+    await app.db.update(s.contacts).set(data).where(eq(s.contacts.id, c.id));
+    const [after] = await app.db.select({ email: s.contacts.email, notifyEmail: s.contacts.notifyEmail, notifyMode: s.contacts.notifyMode }).from(s.contacts).where(eq(s.contacts.id, c.id));
+    return { preferences: merged, notifyEmail: after?.notifyEmail ?? null, notifyMode: after?.notifyMode ?? 'main', sendsTo: after ? contactAddresses(after) : [] };
   });
 
   /* --------------------------------------------------------- reports */

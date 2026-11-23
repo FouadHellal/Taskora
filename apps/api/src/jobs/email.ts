@@ -7,15 +7,14 @@ import { getSystemSettings } from '../lib/settings.js';
 import { resolveSmtp, transportFor } from '../lib/mail.js';
 import { emailTextWithImages } from '../lib/note-images.js';
 import { noteImagesToText } from '@taskora/shared';
-import { sendReplyEmail } from './client-email.js';
+import { sendBranded, sendReplyEmail } from './client-email.js';
+import { loadMailBrand } from '../lib/mail-template.js';
+import { mailLang, mailTranslator } from './mail-i18n.js';
 
 export function withSignature(body: string, signature: string) {
   return signature.trim() ? `${body.replace(/\s+$/, '')}\n\n-- \n${signature.trim()}` : body;
 }
 
-function escapeHtml(s: string) {
-  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
-}
 
 /**
  * Sends pending in-app notifications by e-mail. Notifications older than a
@@ -46,6 +45,7 @@ export async function dispatchNotificationEmails(db: Db, config: Config, transpo
   const t = transport ?? transportFor(smtp);
   const settings = await getSystemSettings(db);
   const base = (config.PUBLIC_URL ?? '').replace(/\/$/, '');
+  const brand = await loadMailBrand(db, config, smtp, settings);
   const result = { sent: 0, skipped: 0, failed: 0 };
   const mark = (ids: number[], status: string) =>
     ids.length ? db.update(notifications).set({ emailStatus: status, emailedAt: new Date() }).where(inArray(notifications.id, ids)) : null;
@@ -59,15 +59,24 @@ export async function dispatchNotificationEmails(db: Db, config: Config, transpo
     const url = r.link && base ? `${base}${r.link}` : null;
     const body = r.body ? noteImagesToText(r.body) : null;
     try {
-      await t.sendMail({
-        from: smtp.from,
-        to: r.email,
-        subject: `[${settings.organizationName}] ${r.title}`,
-        text: [`Hello ${r.firstName},`, '', r.title, body ?? '', url ? `\nOpen: ${url}` : ''].join('\n'),
-        html: `<p>Hello ${escapeHtml(r.firstName)},</p><p><strong>${escapeHtml(r.title)}</strong></p>${body ? `<p>${escapeHtml(body)}</p>` : ''}${
-          url ? `<p><a href="${escapeHtml(url)}">Open in ${escapeHtml(settings.organizationName)}</a></p>` : ''
-        }<p style="color:#888;font-size:12px">You receive this because of your Taskora notification settings.</p>`,
-      });
+      const tr = mailTranslator(mailLang((r.preferences as Record<string, unknown>).language as string | undefined ?? settings.language));
+      await sendBranded(
+        db,
+        config,
+        smtp,
+        t,
+        r.email,
+        r.title,
+        {
+          preheader: body?.slice(0, 120) ?? r.title,
+          heading: r.title,
+          greeting: tr('hello', { name: r.firstName }),
+          paragraphs: body ? [body] : [],
+          button: url ? { label: tr('openTaskora'), url } : null,
+          footer: tr('notifFooter'),
+        },
+        { brand },
+      );
       await mark([r.id], 'sent');
       result.sent++;
     } catch {
@@ -103,15 +112,15 @@ export async function sendCustomerNote(db: Db, config: Config, noteId: number, t
     .leftJoin(contacts, eq(contacts.id, tickets.contactId))
     .leftJoin(users, eq(users.id, ticketNotes.userId))
     .where(eq(ticketNotes.id, noteId));
-  if (!row || row.visibility !== 'public' || !row.email) return { sent: false };
+  if (!row || row.visibility !== 'public') return { sent: false };
   // Pasted images go out as attachments; the text names them instead of showing raw markdown.
   const mail = await emailTextWithImages(db, config.UPLOAD_DIR, row.ticketId, row.body);
   const res = await sendReplyEmail(db, config, noteId, mail.attachments, mail.text, transport);
   if (!res.sent) {
-    if (res.reason === 'opted_out') await db.insert(ticketEvents).values({ ticketId: row.ticketId, userId: null, type: 'email_skipped', data: { to: row.email, noteId, reason: 'The contact turned off reply e-mails' } });
+    if (res.reason === 'opted_out') await db.insert(ticketEvents).values({ ticketId: row.ticketId, userId: null, type: 'email_skipped', data: { to: res.to ?? row.email, noteId, reason: 'The contact turned off reply e-mails' } });
     return { sent: false };
   }
-  await db.insert(ticketEvents).values({ ticketId: row.ticketId, userId: null, type: 'email_sent', data: { to: row.email, noteId } });
+  await db.insert(ticketEvents).values({ ticketId: row.ticketId, userId: null, type: 'email_sent', data: { to: res.to, noteId } });
   return { sent: true };
 }
 

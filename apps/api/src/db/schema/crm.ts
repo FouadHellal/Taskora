@@ -91,6 +91,9 @@ export const contacts = pgTable(
     /** 'user' sees their own tickets; 'manager' sees every ticket, the work and the contracts of the company (primary contacts always do). */
     portalRole: text('portal_role').notNull().default('user'),
     /** Which e-mails the contact receives (ticketCreated, ticketReplies, ticketResolved, monthlyReport, companyTickets); missing keys use the defaults. */
+    /** Second mailbox for ticket e-mails, and where they go: 'main', 'other' or 'both'. */
+    notifyEmail: text('notify_email'),
+    notifyMode: text('notify_mode').notNull().default('main'),
     emailPreferences: jsonb('email_preferences').$type<Record<string, boolean>>().notNull().default(sql`'{}'::jsonb`),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

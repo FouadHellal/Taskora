@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Mail, Send, ShieldCheck } from 'lucide-react';
+import { Mail, Palette, Save, Send, ShieldCheck, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api, ApiError } from '@/lib/api';
 import { useMe } from '@/lib/auth';
@@ -10,6 +10,7 @@ import { Checkbox, Input, Textarea } from '@/components/ui/input';
 import { Badge, Card, CardBody, CardHeader, PageLoader } from '@/components/ui/misc';
 import { FormField, FormGrid, FormSection, handleFormError } from '@/components/form';
 import { InboundEmailLog } from '@/components/admin/inbound-email';
+import { LogoEditor } from '@/components/logo';
 
 interface MailSettings {
   enabled: boolean;
@@ -125,9 +126,7 @@ export default function EmailSettingsPage() {
                   <Input value={f.replyTo} onChange={(e) => set('replyTo', e.target.value)} />
                 </FormField>
               </FormGrid>
-              <FormField label="Signature" hint="Appended to e-mails sent from tickets and test e-mails">
-                <Textarea rows={4} value={f.signature} onChange={(e) => set('signature', e.target.value)} placeholder={'Kind regards,\nThe support team'} />
-              </FormField>
+
             </FormSection>
             <div className="flex flex-wrap items-end gap-2 border-t border-border pt-4">
               <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(false)}>
@@ -154,8 +153,142 @@ export default function EmailSettingsPage() {
             </div>
           </CardBody>
         </Card>
+        <EmailLookCard signature={f.signature} onSignature={(v) => set('signature', v)} onSaveSignature={() => save.mutateAsync(false)} />
         <InboundEmailLog />
       </div>
     </div>
+  );
+}
+
+interface LookSettings {
+  emailHeaderColor: string;
+  emailAccentColor: string;
+  emailFooter: string;
+  emailLogoUpdatedAt: string | null;
+  organizationName: string;
+}
+
+/** A starting point for an HTML signature; {{…}} are filled in when the e-mail is sent. */
+const SIGNATURE_TEMPLATE = `<table cellpadding="0" cellspacing="0" style="font-family:Arial,Helvetica,sans-serif;color:#334155">
+  <tr>
+    <td style="padding-right:16px;vertical-align:middle"><img src="{{logo}}" alt="{{organization}}" height="48" style="display:block;height:48px"></td>
+    <td style="border-left:2px solid #2563eb;padding-left:16px;vertical-align:middle">
+      <div style="font-size:15px;font-weight:bold;color:#0f172a">{{sender}}</div>
+      <div style="font-size:13px;color:#64748b">Support — {{organization}}</div>
+      <div style="font-size:13px;margin-top:6px">+00 000 00 00 · <a href="mailto:support@example.com" style="color:#2563eb;text-decoration:none">support@example.com</a></div>
+      <div style="font-size:13px"><a href="{{portal}}" style="color:#2563eb;text-decoration:none">Client portal</a></div>
+    </td>
+  </tr>
+</table>`;
+
+function EmailLookCard({ signature, onSignature, onSaveSignature }: { signature: string; onSignature: (v: string) => void; onSaveSignature: () => Promise<unknown> }) {
+  const qc = useQueryClient();
+  const sys = useQuery({ queryKey: ['system-settings'], queryFn: () => api.get<LookSettings & Record<string, unknown>>('/settings/system') });
+  const [look, setLook] = useState<{ emailHeaderColor: string; emailAccentColor: string; emailFooter: string } | null>(null);
+  const [html, setHtml] = useState('');
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (sys.data && !look) setLook({ emailHeaderColor: sys.data.emailHeaderColor, emailAccentColor: sys.data.emailAccentColor, emailFooter: sys.data.emailFooter });
+  }, [sys.data, look]);
+  // Live preview of a client e-mail with the unsaved look and signature.
+  useEffect(() => {
+    if (!look) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      api
+        .post<{ html: string }>('/settings/email/preview', { signature, headerColor: look.emailHeaderColor, accentColor: look.emailAccentColor, footer: look.emailFooter })
+        .then((r) => setHtml(r.html))
+        .catch(() => null);
+    }, 400);
+    return () => {
+      if (timer.current) clearTimeout(timer.current);
+    };
+  }, [look, signature, sys.data?.emailLogoUpdatedAt]);
+  const save = useMutation({
+    mutationFn: async () => {
+      await api.put('/settings/system', look);
+      await onSaveSignature();
+    },
+    onSuccess: () => {
+      toast.success('E-mail look and signature saved');
+      qc.invalidateQueries({ queryKey: ['system-settings'] });
+    },
+    onError: (e) => handleFormError(e),
+  });
+  if (!sys.data || !look) return null;
+  const valid = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
+  const colour = (key: 'emailHeaderColor' | 'emailAccentColor', label: string, hint: string) => (
+    <FormField label={label} hint={hint}>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={valid(look[key]) ? look[key] : '#000000'}
+          onChange={(e) => setLook({ ...look, [key]: e.target.value })}
+          className="h-8 w-10 cursor-pointer rounded border border-border bg-transparent p-0.5"
+          aria-label={label}
+        />
+        <Input value={look[key]} onChange={(e) => setLook({ ...look, [key]: e.target.value })} className="w-28 font-mono" maxLength={7} />
+      </div>
+    </FormField>
+  );
+  return (
+    <Card>
+      <CardHeader
+        title={
+          <span className="inline-flex items-center gap-1.5">
+            <Palette className="size-4 text-primary" /> Look of the e-mails and signature
+          </span>
+        }
+        description="Every e-mail (ticket e-mails, client notifications, IT alerts, invitations) uses this logo, these colours and this signature."
+      />
+      <CardBody className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className="space-y-4">
+          <FormField
+            label="E-mail logo"
+            hint="Shown in the header of every e-mail and usable in the signature. Use a version that reads well on the header colour. Without one, the organization logo is used."
+          >
+            <LogoEditor
+              kind="email"
+              maxSize={600}
+              previewBg={valid(look.emailHeaderColor) ? look.emailHeaderColor : undefined}
+              logoUpdatedAt={sys.data.emailLogoUpdatedAt}
+              onChanged={() => qc.invalidateQueries({ queryKey: ['system-settings'] })}
+            />
+          </FormField>
+          <FormGrid cols={2}>
+            {colour('emailHeaderColor', 'Header colour', 'Behind the logo')}
+            {colour('emailAccentColor', 'Accent colour', 'Buttons, links and highlights')}
+          </FormGrid>
+          <FormField label="Footer line" hint="Optional: address, company number, legal text.">
+            <Input value={look.emailFooter} onChange={(e) => setLook({ ...look, emailFooter: e.target.value })} />
+          </FormField>
+          <FormField
+            label="Signature"
+            hint={
+              <>
+                Plain text or HTML (tables and inline styles; scripts are removed). Variables: <code>{'{{sender}}'}</code> the technician (or the team for automatic e-mails),{' '}
+                <code>{'{{organization}}'}</code>, <code>{'{{logo}}'}</code> the e-mail logo address, <code>{'{{portal}}'}</code> the client portal address.
+              </>
+            }
+          >
+            <Textarea rows={12} value={signature} onChange={(e) => onSignature(e.target.value)} className="font-mono text-xs" placeholder={'Kind regards,\n{{sender}}\n{{organization}}'} />
+          </FormField>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" loading={save.isPending} onClick={() => save.mutate()}>
+              <Save /> Save look and signature
+            </Button>
+            {!signature.trim() && (
+              <Button variant="ghost" onClick={() => onSignature(SIGNATURE_TEMPLATE)}>
+                <Wand2 /> Start from a template
+              </Button>
+            )}
+          </div>
+        </div>
+        <div>
+          <div className="mb-1.5 text-[12px] font-medium text-muted">Preview — confirmation e-mail to a client</div>
+          <iframe title="E-mail preview" sandbox="" srcDoc={html} className="h-[720px] w-full rounded-md border border-border bg-white" />
+        </div>
+      </CardBody>
+    </Card>
   );
 }
