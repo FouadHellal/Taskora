@@ -1987,6 +1987,14 @@ const de: Dict = {
   "Access points": "Access Points",
   "Switches": "Switches",
   "Gateways": "Gateways",
+  "Open API address": "Open-API-Adresse",
+  "The “Interface Access Address” shown in Omada → Settings → Platform Integration → Open API. Cloud: pick your region. On-premise: https://IP:8043, reachable from the Taskora server.": "Die „Interface Access Address“ aus Omada → Settings → Platform Integration → Open API. Cloud: Region wählen. Vor Ort: https://IP:8043, vom Taskora-Server erreichbar.",
+  "Omada cloud": "Omada-Cloud",
+  "Europe": "Europa",
+  "United States": "USA",
+  "Asia Pacific": "Asien-Pazifik",
+  "Shown on the same Open API page. Required for the Omada cloud; read automatically from an on-premise controller.": "Steht auf derselben Open-API-Seite. Für die Omada-Cloud erforderlich; bei einem Controller vor Ort wird sie automatisch gelesen.",
+  "On the same page, note the Interface Access Address and the Omada ID shown at the top.": "Notieren Sie auf derselben Seite die Interface Access Address und die Omada ID oben.",
 };
 
 export default de;

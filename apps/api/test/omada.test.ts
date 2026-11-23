@@ -80,6 +80,21 @@ describe('Omada client', () => {
     await expect(bad.sites()).rejects.toThrow(/refused the credentials/);
   });
 
+  it('works with the Omada cloud: no /api/info, the Omada ID is required, errors are explained', async () => {
+    const calls: string[] = [];
+    const cloud: OmadaTransport = async (req) => {
+      calls.push(req.url);
+      if (req.url.includes('/openapi/authorize/token')) return { status: 200, body: { errorCode: -7131, msg: 'Controller ID not exist.' } };
+      return { status: 200, body: null };
+    };
+    const noId = new OmadaClient({ baseUrl: 'https://euw1-omada-northbound.tplinkcloud.com', clientId: 'id', clientSecret: 'secret', transport: cloud });
+    await expect(noId.testConnection()).rejects.toThrow(/Enter the Omada ID/);
+    expect(calls).toEqual([]);
+    const wrongId = new OmadaClient({ baseUrl: 'https://euw1-omada-northbound.tplinkcloud.com', omadacId: 'x', clientId: 'id', clientSecret: 'secret', transport: cloud });
+    await expect(wrongId.testConnection()).rejects.toThrow(/Interface Access Address/);
+    expect(calls.some((u) => u.includes('/api/info'))).toBe(false);
+  });
+
   it('understands device types and uptimes', () => {
     expect(deviceKind({ type: 'ap' })).toBe('ap');
     expect(deviceKind({ type: 'switch' })).toBe('switch');

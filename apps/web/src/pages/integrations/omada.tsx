@@ -66,6 +66,13 @@ interface Device {
   lastSeenAt: string | null;
 }
 
+/** Omada's cloud Open API hosts (same list as the API). */
+const CLOUD_REGIONS = [
+  { label: 'Europe', url: 'https://euw1-omada-northbound.tplinkcloud.com' },
+  { label: 'United States', url: 'https://use1-omada-northbound.tplinkcloud.com' },
+  { label: 'Asia Pacific', url: 'https://aps1-omada-northbound.tplinkcloud.com' },
+];
+
 const KIND_LABEL: Record<string, string> = { ap: 'Access point', switch: 'Switch', gateway: 'Gateway', other: 'Other' };
 
 export const fmtMac = (m: string) => (m.length === 12 ? m.toUpperCase().match(/../g)!.join(':') : m);
@@ -186,10 +193,24 @@ function Settings({ view, manage }: { view: OmadaView; manage: boolean }) {
         <CardBody className="space-y-4">
           <Checkbox label={t('Synchronise with the Omada controller')} checked={f.enabled} disabled={!manage} onChange={(e) => setF({ ...f, enabled: e.target.checked })} />
           <FormGrid cols={2}>
-            <FormField label="Controller address" required hint="On-premise: https://IP-or-name:8043 (OC200/OC300 often :443). Must be reachable from the Taskora server.">
-              <Input value={f.baseUrl} disabled={!manage} placeholder="https://192.168.0.10:8043" onChange={(e) => setF({ ...f, baseUrl: e.target.value })} />
+            <FormField label="Open API address" required hint="The “Interface Access Address” shown in Omada → Settings → Platform Integration → Open API. Cloud: pick your region. On-premise: https://IP:8043, reachable from the Taskora server.">
+              <Input value={f.baseUrl} disabled={!manage} placeholder="https://euw1-omada-northbound.tplinkcloud.com" onChange={(e) => setF({ ...f, baseUrl: e.target.value })} />
+              {manage && (
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {CLOUD_REGIONS.map((r) => (
+                    <button
+                      key={r.url}
+                      type="button"
+                      onClick={() => setF({ ...f, baseUrl: r.url, verifyTls: true })}
+                      className={`cursor-pointer rounded border px-2 py-0.5 text-[11px] ${f.baseUrl === r.url ? 'border-primary bg-primary-soft text-primary' : 'border-border hover:border-border-strong'}`}
+                    >
+                      {t('Omada cloud')} — {t(r.label)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </FormField>
-            <FormField label="Omada ID" hint="Optional: read from the controller automatically.">
+            <FormField label="Omada ID" required={f.baseUrl.includes('tplinkcloud.com')} hint="Shown on the same Open API page. Required for the Omada cloud; read automatically from an on-premise controller.">
               <Input value={f.omadacId} disabled={!manage} onChange={(e) => setF({ ...f, omadacId: e.target.value })} />
             </FormField>
             <FormField label="Client ID" hint={view.clientIdHint ? `${t('Stored')} (${view.clientIdHint}) — ${t('leave empty to keep it')}` : undefined}>
@@ -252,6 +273,7 @@ function Settings({ view, manage }: { view: OmadaView; manage: boolean }) {
             <li>{t('In the Omada controller, open Global View → Settings → Platform Integration → Open API.')}</li>
             <li>{t('Click Add New App, give it a name (e.g. Taskora) and choose the mode “Client” (client credentials). Leave the Redirect URL empty.')}</li>
             <li>{t('Give the app read access to the sites you want (Viewer is enough: Taskora never changes anything).')}</li>
+            <li>{t('On the same page, note the Interface Access Address and the Omada ID shown at the top.')}</li>
             <li>{t('Copy the Client ID and the Client Secret into this page, with the controller address, then click Test connection.')}</li>
             <li>{t('Save, map each Omada site to its company in the Sites tab and synchronise.')}</li>
           </ol>

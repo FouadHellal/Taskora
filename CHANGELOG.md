@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.10.1] — 2026-11-24
+
+### Fixed
+- Omada: works with the **Omada cloud Open API** (`https://<region>-omada-northbound.tplinkcloud.com`): no call to `/api/info` there, the Omada ID is required, and region shortcuts (Europe, United States, Asia Pacific) fill the address. Setup errors are explained in plain words (unknown Omada ID, refused credentials, web-interface address used instead of the Open API address, missing site access).
+
 ## [0.10.0] — 2026-11-23
 
 ### Added

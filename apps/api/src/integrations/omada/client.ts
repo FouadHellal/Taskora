@@ -89,6 +89,33 @@ type Page<T> = { totalRows?: number; currentPage?: number; data?: T[] };
 
 const TOKEN_ERRORS = new Set([-44112, -44113]);
 
+/** Omada's cloud Open API ("northbound") hosts, per region. */
+export const OMADA_CLOUD_REGIONS: Record<string, { label: string; url: string }> = {
+  euw1: { label: 'Europe', url: 'https://euw1-omada-northbound.tplinkcloud.com' },
+  use1: { label: 'United States', url: 'https://use1-omada-northbound.tplinkcloud.com' },
+  aps1: { label: 'Asia Pacific', url: 'https://aps1-omada-northbound.tplinkcloud.com' },
+};
+export const isOmadaCloud = (baseUrl: string) => /omada-northbound\.tplinkcloud\.com/i.test(baseUrl);
+
+/** Plain-language hints for the error codes users run into while setting up. */
+export function explainOmadaError(code: number | string, msg?: string | null): string {
+  switch (code) {
+    case -7131:
+      return 'The Omada cloud does not know this Omada ID. Copy the "Omada ID" and the "Interface Access Address" shown in Omada → Settings → Platform Integration → Open API.';
+    case -44116:
+    case -44106:
+    case -1001:
+      return 'The controller refused the credentials: check the Omada ID, the Client ID and secret, and that the app uses the "Client" mode.';
+    case -1200:
+      return 'This is the address of the web interface, not of the Open API: use the "Interface Access Address" shown on the Open API page.';
+    case -1005:
+    case -1007:
+      return 'The Open API app has no access to this data: give it at least Viewer access to the sites.';
+    default:
+      return msg ?? `error ${code}`;
+  }
+}
+
 export class OmadaClient {
   private token: string | null = null;
   private tokenExpiresAt = 0;
@@ -118,7 +145,9 @@ export class OmadaClient {
   }
 
   private async ensureId() {
-    if (!this.omadacId) await this.info();
+    if (this.omadacId) return this.omadacId;
+    if (isOmadaCloud(this.base)) throw new OmadaError(400, 'omadac_id', 'Enter the Omada ID shown in Omada → Settings → Platform Integration → Open API (the cloud cannot look it up).');
+    await this.info();
     return this.omadacId!;
   }
 
@@ -133,7 +162,7 @@ export class OmadaClient {
     });
     const env = res.body as Envelope<{ accessToken?: string; expiresIn?: number }> | null;
     if (!env || env.errorCode !== 0 || !env.result?.accessToken) {
-      throw new OmadaError(res.status, env?.errorCode ?? 'auth', `The controller refused the credentials (${env?.msg ?? `HTTP ${res.status}`}): check the Client ID, the secret and that the app uses Client mode`);
+      throw new OmadaError(res.status, env?.errorCode ?? 'auth', explainOmadaError(env?.errorCode ?? res.status, env?.msg ?? `HTTP ${res.status}`));
     }
     this.token = env.result.accessToken;
     this.tokenExpiresAt = Date.now() + (env.result.expiresIn ?? 7200) * 1000;
@@ -164,7 +193,7 @@ export class OmadaClient {
         continue;
       }
       if (res.status === 404 || !env || env.errorCode !== 0) {
-        throw new OmadaError(res.status, env?.errorCode ?? res.status, `Omada API ${path.split('?')[0]}: ${env?.msg ?? `HTTP ${res.status}`}`);
+        throw new OmadaError(res.status, env?.errorCode ?? res.status, `Omada API ${path.split('?')[0]}: ${explainOmadaError(env?.errorCode ?? res.status, env?.msg ?? `HTTP ${res.status}`)}`);
       }
       return env.result as T;
     }
@@ -218,8 +247,9 @@ export class OmadaClient {
 
   /** Checks address, credentials and permissions; returns the sites. */
   async testConnection() {
-    const info = await this.info();
+    // The cloud (and some controllers) have no /api/info: the version is optional.
+    const info = this.omadacId || isOmadaCloud(this.base) ? null : await this.info();
     const sites = await this.sites();
-    return { controllerVersion: info.controllerVer, sites: sites.map((x) => ({ id: String(x.siteId ?? x.id ?? ''), name: String(x.name ?? '') })) };
+    return { controllerVersion: info?.controllerVer ?? null, sites: sites.map((x) => ({ id: String(x.siteId ?? x.id ?? ''), name: String(x.name ?? '') })) };
   }
 }
